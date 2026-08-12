@@ -96,5 +96,76 @@ are an argument for keeping dense retrieval alongside BM25 rather than relying o
 - [x] Full-corpus parse time is known and acceptable.
 - [x] Every chunk carries headings and page numbers.
 - [x] Tables survive as markdown.
-- [ ] Text normalisation step written.
-- [ ] `ingest.py` written.
+- [x] Text normalisation step written.
+- [x] `ingest.py` written.
+
+---
+
+## Slice 2 — merge undersized chunks
+
+### Outcome
+
+Chunks now sit in the size band the retrieval literature identifies as best. The BJ30 manual goes
+from 730 fragments at a median of 68 tokens to 208 windows at a median of 393.
+
+### Why
+
+Slice 1 produced chunks far too small to retrieve well: two thirds were under 100 tokens and the
+smallest was 5. A 40-token fragment carries almost no context, and embedding it produces a vector
+that matches little. Published benchmarks put recursive 512-token splitting first of seven
+strategies, so the target is a few hundred tokens rather than a few dozen.
+
+`HybridChunker` merges peers — siblings under one heading — and this manual is built from hundreds
+of small callout boxes and list items with nothing to merge against. The fix has to run after it.
+
+### Commands
+
+```bash
+# fast check against an already-ingested JSONL, no re-parse
+uv run --project backend python playground/check_merge.py
+
+# full re-ingest with merging in the pipeline
+uv run --project backend python scripts/ingest.py data/manuals/<file>.pdf
+```
+
+### Observed
+
+| | before | after |
+| --- | ---: | ---: |
+| chunks | 730 | 208 |
+| median tokens | 68 | 393 |
+| p25 / p75 | 40 / 125 | 320 / 432 |
+| p95 | 338 | 543 |
+| under 100 tokens | 67% | 1% |
+| within 200–512 tokens | 12% | 86% |
+
+`max` stays at 2838 tokens and one chunk still spans four pages. Merging only joins, never splits, so
+a pre-existing oversized chunk passes through unchanged. At p95 = 543 these are rare enough to leave
+alone until the eval harness says otherwise.
+
+### Two design points
+
+**Page span is capped at three.** This is the same constraint as the client brief's "a citation may
+span two or three pages", so the merge window and the citation window are the same thing by
+construction rather than by coincidence.
+
+**Heading selection uses document frequency, not a word list.** Merged chunks keep every heading
+encountered, ordered by how often each appears across the document, least frequent first. `Attention`
+occurs on 121 of 730 chunks and locates nothing, so it sinks below a real section name automatically.
+Hardcoding a list of callout words would have worked on this manual and broken on the next one, which
+the document-agnostic rule in `AGENTS.md` forbids.
+
+### Known issue
+
+18 of 730 chunks (2.5%) contain mangled table text — the maintenance-schedule checkmark matrix
+serialises as `, Primary Maintenance = . ,` fragments. Technical Parameters chunks read cleanly, so
+this is specific to matrix-style tables rather than tables in general. Left alone until the eval
+harness shows those pages retrieving badly.
+
+### Checkpoint
+
+- [x] Merge step written and wired into `ingest.py`.
+- [x] Median chunk size inside the target band.
+- [x] Page span capped to match the citation requirement.
+- [ ] Corpus re-ingested with merging applied.
+- [ ] Second manual ingested.

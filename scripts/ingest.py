@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
+from app.ingestion.merge import merge_chunks, token_counter  # noqa: E402
 from app.ingestion.normalize import build_vocabulary, normalize  # noqa: E402
 from app.ingestion.offset import detect_page_offset  # noqa: E402
 from app.providers.docling_parser import parse  # noqa: E402
@@ -47,6 +48,14 @@ def main() -> None:
         f"in {elapsed / 60:.1f} min ({elapsed / manual.page_count:.2f} s/page)"
     )
 
+    count_tokens = token_counter()
+    chunks = merge_chunks(manual.chunks, count_tokens)
+    sizes = sorted(count_tokens(chunk.text) for chunk in chunks)
+    print(
+        f"  merged {len(manual.chunks)} -> {len(chunks)} chunks "
+        f"(median {sizes[len(sizes) // 2]} tokens, max {sizes[-1]})"
+    )
+
     vocabulary = build_vocabulary(manual.full_text)
     print(f"  vocabulary: {len(vocabulary)} words")
 
@@ -55,7 +64,7 @@ def main() -> None:
     changed = 0
 
     with output_path.open("w", encoding="utf-8") as handle:
-        for index, chunk in enumerate(manual.chunks):
+        for index, chunk in enumerate(chunks):
             text = normalize(chunk.text, vocabulary)
             if text != chunk.text:
                 changed += 1
@@ -71,7 +80,7 @@ def main() -> None:
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    print(f"  normalised {changed}/{len(manual.chunks)} chunks")
+    print(f"  normalised {changed}/{len(chunks)} chunks")
     print(f"wrote {output_path.relative_to(REPO_ROOT)}")
 
 

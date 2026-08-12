@@ -3,14 +3,11 @@
 import os
 from pathlib import Path
 
+from app.config import EMBEDDING_MODEL, MAX_EMBEDDING_TOKENS
 from app.ingestion.models import Chunk, ParsedManual
 
 # Inductor needs a C++ compiler and Windows has none. Must precede docling's torch import.
 os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
-
-# Chunk sizing must be counted with the tokenizer of the model that will embed the chunk.
-EMBEDDING_MODEL = "text-embedding-3-large"
-MAX_EMBEDDING_TOKENS = 8191
 
 
 def _build_converter():
