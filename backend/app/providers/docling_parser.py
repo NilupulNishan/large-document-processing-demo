@@ -9,7 +9,7 @@ from app.ingestion.models import Chunk, ParsedManual
 os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
 
 # Chunk sizing must be counted with the tokenizer of the model that will embed the chunk.
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "text-embedding-3-large"
 MAX_EMBEDDING_TOKENS = 8191
 
 

@@ -253,3 +253,38 @@ tuned by changing one number. The threshold of 3 is a starting value, not a find
 **The handoff payload** is the point of the feature, and is fixed: reference, issue summary, every
 step already suggested with the user's report on each, pages already shown, trigger reason, suggested
 next step, and the full transcript. A human must never have to ask the user to start again.
+
+---
+
+## D15 — `southeastasia`, `text-embedding-3-large`, and `gpt-5.4-nano` to start
+
+**Region.** `southeastasia`. `centralindia` carries no Azure OpenAI models at all, so the resource
+group's own region is irrelevant — a group is a logical container and can hold resources anywhere.
+`southeastasia` offers the same model catalogue as `eastus` at roughly a quarter of the network
+distance from Colombo, and the project's existing container registry and app services already sit
+there.
+
+**Embeddings: `text-embedding-3-large`.** Across the whole corpus the difference against
+`-small` is under two cents — $0.023 versus $0.004. It is the cheapest quality improvement available
+anywhere in this project, and it lands on retrieval, which D3 identifies as the weakest link. The
+3072-dimension vectors cost nothing meaningful at roughly 400 chunks.
+
+This is the one model choice that is **not** cheaply reversible. Changing it later invalidates every
+stored vector and forces a full re-ingest, so it is decided before anything is embedded.
+
+**Chat models: start with `gpt-5.4-nano` everywhere.** At $0.20/$1.25 per million it puts a
+500-question demo at about $1.00 and the ingest-time contextual pass at $0.21.
+
+Every chat model is a configuration value read through one settings module. Being wrong costs a
+one-line edit and no re-ingest, which is why this decision is made cheaply and empirically rather
+than argued in advance.
+
+**Where it may need to change.** The answer step carries the most constraints of any call in the
+system — choose a format, synthesise a diagnosis from six passages, emit exact citations, reproduce
+safety warnings verbatim, and set `resolved`. Nano-class models are the weakest at holding several
+instructions at once, and this is the only output a client ever sees. If the eval harness or a
+manual walkthrough shows dropped warnings, wrong citations, or ignored formats, the escalation path
+is `gpt-5.4-mini` at $3.00 per 500 questions, then `gpt-5.6-terra` at $9.50. Both are rounding errors
+against the cost of a demo that does not land.
+
+Numbers and re-verification commands in `docs/pricing.md`.

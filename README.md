@@ -14,6 +14,8 @@ Runs entirely locally. Azure OpenAI and Tavily are the only network calls.
 | `docs/client-brief.md` | The problem, the user story, and the definition of done |
 | `docs/architecture.md` | Boundaries, pipeline steps, data model |
 | `docs/decisions.md` | Every non-obvious choice with its reason, plus open questions |
+| `docs/azure-setup.md` | Provisioning the one cloud resource, and tearing it down |
+| `docs/pricing.md` | What it costs, and the commands to re-check |
 | `docs/build-log.md` | One entry per working slice |
 | `AGENTS.md` | Boundaries, non-goals and policy for coding agents |
 
