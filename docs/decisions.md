@@ -64,8 +64,12 @@ structure-aware and tokenizer-aware — it splits on real document structure, th
 chunks and merges under-sized ones to fit the embedding model.
 
 The heading prefix is a free approximation of Anthropic's Contextual Retrieval, which cut top-20
-retrieval failure from 5.7% to 3.7% by giving each chunk its surrounding context. Docling supplies
-headings at no cost. A chunk reading *"Press and hold for 3 seconds"* is unfindable without them.
+retrieval failure from 5.7% to 3.7% by giving each chunk its surrounding context. A chunk reading
+*"Press and hold for 3 seconds"* is unfindable without it.
+
+**Corrected after measurement.** Docling headings are present on 100% of chunks but are single-level,
+not a path — so they disambiguate far less than assumed here. The LLM-written context sentence below
+is load-bearing, not a supplement to it. Numbers in `docs/build-log.md`, Slice 0.
 
 The previous build lost structure entirely: it emitted one Document per page, so hierarchical
 chunking could never span a section, and no heading metadata was retained.
