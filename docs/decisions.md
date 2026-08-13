@@ -74,13 +74,29 @@ is load-bearing, not a supplement to it. Numbers in `docs/build-log.md`, Slice 0
 The previous build lost structure entirely: it emitted one Document per page, so hierarchical
 chunking could never span a section, and no heading metadata was retained.
 
-**Promoted from deferred.** The full Anthropic technique — an LLM writing a context sentence for each
-chunk against the whole document — is now in v1 rather than held back. It was deferred only on cost,
-and cost is no longer a constraint. It is a one-time offline pass at ingest with zero runtime latency,
-which makes it the cheapest accuracy gain available under a "fast at query time" requirement.
+**Promoted from deferred.** The context sentence is in v1 rather than held back. It is a one-time
+offline pass with zero runtime latency, which makes it the cheapest accuracy gain available under a
+"fast at query time" requirement.
 
-Ingest therefore writes two things onto each chunk before embedding: the Docling heading path, and an
-LLM-written context sentence. The eval harness measures each separately so we know what each is worth.
+Indexing therefore writes two things onto each chunk before embedding: the Docling heading path, and
+an LLM-written context sentence. The eval harness measures each separately so we know what each is
+worth.
+
+**Corrected on cost — the context window is the chunk's neighbours, not the whole document.**
+"Cost is no longer a constraint" was asserted here without arithmetic. Measured: the corpus is
+170,559 tokens across 475 chunks, so sending the whole manual with every chunk is 40.7M input tokens
+— about **$8.13** on nano uncached, against the **$0.21** D15 records for this same pass. The two
+numbers cannot both be right, and D15's is the one that assumed a window.
+
+Each chunk therefore gets its heading, the manual title, and its immediate neighbours — roughly 2–3k
+tokens per call, restoring the $0.21 figure. This targets the failure the technique exists to fix: a
+chunk reading *"Press and hold for 3 seconds"* is unfindable because it lacks **local** context, not
+because it lacks the whole book. Azure prompt caching could make the full-document variant affordable,
+but that depends on cache-hit behaviour we would have to spend money to observe.
+
+**Sequenced after a baseline.** The pass is built in Slice 5, not alongside the index. Measuring the
+heading path and the context sentence separately — which this decision requires — needs an index
+carrying neither to measure against.
 
 ---
 

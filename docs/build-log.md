@@ -189,3 +189,79 @@ Both are left alone until the eval harness shows those pages retrieving badly.
 - [x] Page span capped to match the citation requirement.
 - [x] Corpus re-ingested with merging applied.
 - [x] Second manual ingested — 475 chunks across 546 pages.
+
+---
+
+## Slice 3 — embed the corpus and make it searchable
+
+### Outcome
+
+Both manuals are in a LanceDB table with dense vectors and a full-text index, searchable by hybrid
+query fused with RRF. This is the first slice that calls Azure and the first that can be judged on
+retrieval quality rather than on counts.
+
+### Why
+
+Nothing could search the corpus. Everything downstream — the gate, the eval harness, the answer step
+— reads retrieval output, so this is the gate on all of it.
+
+Indexing is a **separate script** from ingestion. Parsing costs ~10 minutes per manual; embedding
+costs ~60 seconds. Keeping JSONL as the boundary means changing what gets embedded never costs
+another parse — which matters directly, because Slice 5 changes exactly that.
+
+### Commands
+
+```bash
+uv add --project backend openai lancedb python-dotenv
+
+uv run --project backend python scripts/index.py data/chunks/baic-bj30-e30-owner-manual-en.jsonl
+uv run --project backend python scripts/index.py data/chunks/baic-x55-ii-owner-manual-en.jsonl
+uv run --project backend python playground/check_search.py
+```
+
+### Observed
+
+| | BJ30 | X55 |
+| --- | ---: | ---: |
+| chunks | 213 | 262 |
+| tokens embedded | 84,689 | 92,104 |
+| embed time | 63.7 s | 64.5 s |
+
+475 rows total, so indexing the second manual replaced only its own rows and left the first intact.
+176,793 tokens at `text-embedding-3-large` is about **$0.023** — matching D15's estimate.
+
+Retrieval was checked against five hand-written queries per manual. Clear hits:
+
+| Query | Result |
+| --- | --- |
+| pair a phone over bluetooth (BJ30) | p89–90, *"To pair a mobile phone, follow these steps"* |
+| engine oil specification (BJ30) | p276, *"Oil = SP/C5 0W-20 … Filling Amount = 4.7"* |
+| engine oil specification (X55) | p263, *"Specification = SP/C50 W/20"* |
+| change a flat tyre (X55) | p230–231, *"Accidental flat tire handling"* |
+
+Printed page numbers are shown for BJ30 and PDF indices for X55, correctly reflecting that only one
+of the two has a detected offset. No query returned a row from the other manual.
+
+### Two misses, both the same cause
+
+`what does the yellow engine warning light mean` returns turn-signal and particulate-filter passages
+on BJ30, under the heading `Attention`. `how do I pair a phone over bluetooth` on X55 returns
+navigation, USB and coolant-gauge passages.
+
+Both are chunks whose heading locates nothing — the problem D4 records and the contextual sentence in
+Slice 5 exists to fix. They are left as-is deliberately: this index is the **baseline** that Slice 4
+measures and Slice 5 must beat. Fixing them now would leave nothing to compare against.
+
+Worth noting the heading paths seen here (`Tire Exchange > Replacement`) are produced by the Slice 2
+merge joining several headings by document frequency, not by a Docling hierarchy. Docling's own
+headings remain single-level, as Slice 0 found.
+
+### Checkpoint
+
+- [x] `openai`, `lancedb` and `python-dotenv` declared.
+- [x] `config.py` reads `backend/.env`; no module raises at import without it.
+- [x] Azure embeddings return 3,072 dimensions, matching `EMBEDDING_DIMENSIONS`.
+- [x] Both manuals indexed; re-indexing one leaves the other intact.
+- [x] Hybrid search returns correct pages for spec-table and procedure queries.
+- [x] Search scoped to one manual never returns another's rows.
+- [ ] Recall@10 measured against labelled questions — Slice 4.

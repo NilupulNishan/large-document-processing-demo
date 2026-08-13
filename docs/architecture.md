@@ -5,7 +5,9 @@ If a component named here does not exist yet, it is marked **(not built)**.
 
 Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
-Status: **nothing below is built yet.**
+Status: the offline half is built through chunking — parse, normalise, merge, page-offset detection.
+Embedding and indexing are in progress. Nothing in the online half exists yet; every part of it is
+marked **(not built)** below.
 
 ## Two halves
 
@@ -13,18 +15,24 @@ Ingestion is offline and runs once per manual. The application is online and nev
 
 ```mermaid
 flowchart TB
-    subgraph offline["Offline — ingest.py"]
-        pdf[Manual PDF] --> docling[Docling DocumentConverter]
+    subgraph ingest["Offline — ingest.py"]
+        pdf[Manual PDF] --> offset["Detect printed-page offset"]
+        offset --> docling[Docling DocumentConverter]
         docling --> chunk[HybridChunker]
-        chunk --> head["Prefix Docling heading path"]
-        head --> ctx["LLM-written context sentence<br/>gpt-4o-mini, one per chunk"]
-        ctx --> embed[Azure text-embedding-3-small]
-        embed --> lance[(LanceDB<br/>dense + full-text)]
-        docling --> offset["Detect printed-page offset"]
-        offset --> sqlite[(SQLite)]
+        chunk --> merge["Merge undersized chunks"]
+        merge --> norm["Normalise: dehyphenate,<br/>collapse whitespace"]
+        norm --> jsonl[("data/chunks/*.jsonl")]
     end
 
-    subgraph online["Online — FastAPI, SSE"]
+    subgraph index["Offline — index.py"]
+        jsonl --> head["Prefix Docling heading path"]
+        head --> ctx["LLM context sentence<br/>gpt-5.4-nano — (not built)"]
+        ctx --> embed[Azure text-embedding-3-large]
+        embed --> lance[(LanceDB<br/>dense + full-text)]
+        jsonl --> sqlite[(SQLite — not built)]
+    end
+
+    subgraph online["Online — FastAPI, SSE — (not built)"]
         q[User question] --> resolve["1 resolve_query"]
         resolve --> retrieve["2 retrieve"]
         retrieve --> rerank["3 rerank"]
@@ -42,10 +50,11 @@ flowchart TB
     esc -.-> inbox[Operator inbox]
 ```
 
-## Pipeline steps
+## Pipeline steps — (not built)
 
 Each step is a class in `backend/app/pipeline/` with one `run(ctx)` method. `build_pipeline()`
-assembles them in order. Adding a capability means adding a step.
+assembles them in order. Adding a capability means adding a step. None of the seven exist yet; the
+directory itself is not created.
 
 **1 · resolve_query** — If the turn is a follow-up, rewrite it into a standalone question using the
 last ~6 user turns, then concatenate the rewrite with the raw question. If there is no history, pass
@@ -94,7 +103,7 @@ general-knowledge answer about a real vehicle is the most damaging failure this 
 **7 · escalate** — Deterministic. Triggers and streak mechanics in D14. Writes an `escalations` row
 and surfaces a reference number to the user.
 
-## Transport
+## Transport — (not built)
 
 `POST /chat` returns Server-Sent Events. FastAPI `StreamingResponse`; no broker, no WebSocket server.
 
@@ -117,7 +126,9 @@ that is skipped emits no event.
 - `routes.py` owns HTTP, `service.py` owns orchestration, `repository.py` owns SQLite.
 - Settings are read only through `backend/app/config.py` and `frontend/src/lib/config.ts`.
 
-## Data model
+## Data model — (not built)
+
+No SQLite database exists yet. Ingestion writes JSONL only.
 
 ```
 manuals      id, title, filename, page_count, page_offset, ingested_at
@@ -138,7 +149,7 @@ escalations  id, session_id, reference, issue_summary, steps_tried_json,
 than the PDF index — the answer cites the printed number, the viewer navigates by the PDF index.
 Getting this backwards shows the wrong page to the user.
 
-## Screens
+## Screens — (not built)
 
 | Screen | Purpose |
 |---|---|
@@ -146,9 +157,9 @@ Getting this backwards shows the wrong page to the user.
 | PDF pane | Renders the cited page beside the answer; citations navigate it |
 | Operator inbox | Lists open escalations; opens the full handoff package for one (D12) |
 
-## Evaluation
+## Evaluation — (not built)
 
-`eval/questions.jsonl` — one row per labelled question:
+Slice 4. `eval/questions.jsonl` — one row per labelled question:
 
 ```json
 {"question": "...", "manual": "...", "expected_pages": [137, 138], "expected_route": "manual"}
