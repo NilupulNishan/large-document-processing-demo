@@ -361,3 +361,104 @@ a claim about live traffic.
 - [x] Baseline recorded for Slice 5 to beat.
 - [x] Questions carry `expected_route` ready for routing accuracy once the gate exists.
 - [ ] Routing accuracy — needs the gate and the cross-encoder.
+
+---
+
+## Slice 5 — cross-encoder reranking, and the gate bands
+
+### Outcome
+
+A local ONNX cross-encoder scores query and passage together. Its scores separate grounded questions
+from ones the manual cannot answer — the thing RRF could not do — so the gate has a real input.
+`GATE_HIGH = -4.44`, `GATE_LOW = -7.21`, with 8% of grounded questions in the ambiguous band.
+
+### Why
+
+Slice 4 proved fusion scores rank position rather than relevance, so D2's gate had no usable signal.
+This is the prerequisite, not the refinement D3 presented it as.
+
+### Commands
+
+```bash
+uv add --project backend onnxruntime "optimum[onnxruntime]" transformers
+uv run --project backend python playground/check_rerank.py
+```
+
+### Observed
+
+| | bge-reranker-base | MiniLM-L6, 30 cand. | MiniLM-L6, 12 cand. |
+| --- | ---: | ---: | ---: |
+| download | 1.1 GB | 91 MB | 91 MB |
+| latency / question | 19,111 ms | 3,242 ms | **1,249 ms** |
+| per passage | 637 ms | 108 ms | 104 ms |
+| ambiguous band | ~10% | 5% | 8% |
+
+`bge-reranker-base` was the first choice because D3 names it first. At 19 s per question it is
+unusable — 63× the ~300 ms D3 claims, and that figure evidently describes the MiniLM option.
+MiniLM is 8× less compute and, on this corpus, **separates better as well as running faster**.
+
+Scores order the unanswerable questions sensibly, most vehicle-related first:
+
+```
+gen-03  -4.44  safety recalls        gen-04  -7.73  price
+gen-02  -4.56  service centre        dec-02  -8.17  poem
+gen-01  -5.52  bluetooth (absent)    dec-01 -10.12  weather
+```
+
+Compare Slice 4, where the poem scored 0.0323 against a grounded range of 0.0302–0.0328 — inside it.
+Here it is 8th of 44, below every grounded question.
+
+### Two corrections to record
+
+**Threading did nothing.** `intra_op_num_threads = 12` was added on the theory that 3.2 s for a
+6-layer model on a 12-core machine meant single-threaded execution. Per-passage cost was 108 ms
+before and 104 ms after: ONNX Runtime was already using the cores. The setting is harmless and stays,
+but it is not what made this faster.
+
+**Cutting candidates 30 → 12 was not free.** The stated justification — Recall@10 is 100%, so the
+answer is always in the top 10 — is wrong. That guarantees the expected *page* is in the top 10, not
+that the highest-*scoring* passage is. `bj30-16` scored −3.01 over 30 candidates and −4.51 over 12,
+moving into the ambiguous band. The trade is 2.6× speed for one extra grader call in 38, which is
+worth taking, but it is a trade.
+
+**ONNX export is now persisted** to `data/models/`. Optimum re-converted from PyTorch on every start
+because `export=True` ignored the ONNX weights already on the Hub. Cold start: 60.6 s → 6.4 s.
+
+### The ambiguous band is a table problem, not a reranker problem
+
+```
+bj30-02  -7.21  spec    What engine oil does it take and how many litres?
+x55-10   -5.41  safety  I accidentally put diesel in. What now?
+bj30-16  -4.51  spec    How often should the car be serviced?
+```
+
+`bj30-02` sets `GATE_LOW` on its own. Its answer, on p276, reads:
+
+```
+Oil, = SP/C5 0W-20. Oil, = L. Oil, Filling Amount = 4.7.
+```
+
+That is the mangled matrix table recorded as a known issue in Slice 2, and `bj30-16`'s answer is the
+maintenance-schedule matrix from the same issue. Both `spec` rows — the category Slice 4 measured
+worst at 33%@1. Fixing table serialisation would raise `GATE_LOW` and narrow the band without
+touching the reranker. Left open, now with evidence of what it costs.
+
+### Remaining latency lever
+
+1,249 ms sits before the first token, which is the worst place for it (D9). Untried: INT8 dynamic
+quantisation, normally 2–4× on CPU for small accuracy loss, and cutting `RERANK_MAX_TOKENS` from 512
+to 256. Either would bring this under 500 ms. Not done yet — the demo needs the gate and the answer
+step more than it needs 800 ms.
+
+Azure alternative if local proves too slow: Cohere Rerank v3.5 on AI Foundry serverless, ~$1 per
+1,000 searches, ~100–300 ms. Azure AI Search's semantic ranker was rejected — it needs a Basic-tier
+service at ~$73/month and would replace LanceDB, against D5.
+
+### Checkpoint
+
+- [x] Cross-encoder provider written, ONNX on CPU, export persisted.
+- [x] Scores separate grounded from unanswerable questions.
+- [x] `GATE_HIGH` and `GATE_LOW` derived from the eval set, not guessed.
+- [x] Latency measured and reduced 19,111 → 1,249 ms.
+- [ ] Reranking wired into `eval/run.py` to measure Recall@1 against the 76% baseline.
+- [ ] Latency under 500 ms.

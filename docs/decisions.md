@@ -208,9 +208,31 @@ delays. If a step is skipped, no event is emitted for it.
 
 **Decision.** Build on `automobile-rag-frontend` rather than starting a new UI.
 
-**Why.** It already contains the four things this product needs: a PDF viewer (`react-pdf` +
-`pdfjs-dist`), a resizable split pane, citation pills, and a chat surface. Rebuilding costs roughly a
-day and produces nothing new. That day goes to retrieval quality and the eval harness instead.
+**Why.** It already contains a PDF viewer (`react-pdf` + `pdfjs-dist`), a resizable split pane,
+citation pills, and a chat surface. Rebuilding those produces nothing new.
+
+**The code lands in `frontend/` in this repo.** It is copied in and owned here, not referenced from a
+sibling directory. A demo assembled from two disconnected repositories is a demo that does not run.
+
+**Corrected after reading it — reuse saves about three-quarters of a day, not a day.** The
+presentational shell transfers: `pdf-viewer.tsx`, `pdf-toolbar.tsx`, the resizable `container.tsx`
+(which already wires a citation click to the viewer page), the message components and `chat-input`.
+
+These do not transfer, and were counted as if they did:
+
+- `useChatSocket.ts` is WebSocket, and D9 chose SSE. It also pulls step labels from a
+  `/pipeline-status` endpoint, which contradicts D9's rule that events describe work that happened.
+- `chat-api.ts` and `types/chat.ts` carry the previous project's contract — `mode`, `confidence`,
+  `needs_followup`. Its `Source` is `{page, section}`; ours needs `page_pdf` **and** `page_printed`
+  (D6), or the viewer opens the wrong page.
+- Session history (requirement 6), the operator inbox (D12), and any visible distinction between
+  manual-grounded and general answers are all absent. That last one is the guard in D13 and is the
+  most consequential thing the UI does.
+
+Also: `pdfjs` loads its worker from a CDN, which breaks the local-first constraint and must be
+self-hosted; and the repo carries `package-lock.json` while this project uses pnpm.
+
+Net: the frontend is 1.5–2 days, and must start before day 4.
 
 ---
 
