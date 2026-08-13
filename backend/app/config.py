@@ -53,3 +53,5 @@ AZURE_OPENAI_CHAT_DEPLOYMENT = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT", "")
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 DOMAIN_DESCRIPTION = os.getenv("DOMAIN_DESCRIPTION", "")
+# Corpus knowledge, not code. See D13 and backend/.env.example.
+SAFETY_TOPICS = tuple(t.strip() for t in os.getenv("SAFETY_TOPICS", "").split(",") if t.strip())

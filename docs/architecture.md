@@ -94,13 +94,16 @@ call is the grader in the ambiguous band, and it returns a score, not a destinat
 format     direct | steps | troubleshoot | explanation
 source     manual | manual+general | general
 answer     the content, with safety warnings reproduced verbatim
-citations  [{ page_pdf, page_printed, section }]   — empty when source is `general`
+citations  [{ type: "page", page_pdf, page_printed, section }]
+           [{ type: "web",  url, title }]
 resolved   true | false
 ```
 
-`source` drives the UI. Manual-grounded content shows page citations; general guidance is visibly
-marked as not coming from the manual. The two must never render identically — an unmarked
-general-knowledge answer about a real vehicle is the most damaging failure this system can produce.
+`source` drives the UI. A `page` citation is emitted only for content the manual supplied; a `web`
+citation only for content web search supplied. The PDF pane responds to `page` citations and ignores
+`web` ones. The two pill types must render visibly differently — an unmarked general-knowledge answer
+about a real vehicle is the most damaging failure this system can produce, and identical-looking
+pills are how that happens (D13).
 
 **7 · escalate** — Deterministic. Triggers and streak mechanics in D14. Writes an `escalations` row
 and surfaces a reference number to the user.

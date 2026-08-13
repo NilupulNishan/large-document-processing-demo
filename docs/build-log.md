@@ -443,6 +443,38 @@ maintenance-schedule matrix from the same issue. Both `spec` rows — the catego
 worst at 33%@1. Fixing table serialisation would raise `GATE_LOW` and narrow the band without
 touching the reranker. Left open, now with evidence of what it costs.
 
+### Rejected: deriving the safety carve-out from the corpus
+
+D13 originally named brakes, airbags, restraints, towing and jacking — a hardcoded English automotive
+list, against the document-agnostic rule. The replacement idea was to let each manual mark its own
+hazards, since both use *Danger*, *Warning*, *Caution* and *Attention*.
+
+Headings looked promising on one manual and collapsed on the other. BJ30 carries `Attention` on 91 of
+213 chunks, `Warning` on 24, `Danger` on 22. X55 has almost none as headings — `Note:` 2, `Notice` 1,
+`Tip` 1. Docling extracts heading structure differently per publisher, so heading-based detection
+would have worked on the manual it was built against and silently failed on the next one.
+
+Body text is consistent — BJ30 70/213 chunks (33%), X55 75/262 (29%) — so the second attempt scanned
+text instead, discounting `warning lamp` and similar instrument names. Measured against the labelled
+set, marker density in the top six passages:
+
+| kind | mean density |
+| --- | ---: |
+| offtopic | **42%** |
+| procedure | 24% |
+| safety | **23%** |
+| absent | 21% |
+| symptom | 20% |
+| spec | 17% |
+
+`safety` is indistinguishable from `procedure`, and *"write me a poem about the sea"* scores highest.
+That is the corpus base rate showing through: with ~30% of chunks containing hazard language, random
+passages land near 30–40%, so the metric measures how random the retrieval was rather than how
+dangerous the topic is.
+
+The carve-out moved to `SAFETY_TOPICS` in `backend/.env`. It is corpus knowledge, so it belongs in
+configuration next to `DOMAIN_DESCRIPTION`, not in code and not in a decision document.
+
 ### Remaining latency lever
 
 1,249 ms sits before the first token, which is the worst place for it (D9). Untried: INT8 dynamic

@@ -278,12 +278,35 @@ Refusing at that point is the behaviour that made the previous build feel useles
 failure than an imperfect answer, because the user is left with nothing.
 
 **The risk this creates, and the guard.** If grounded and unguarded answers look the same, the user
-cannot tell what is verified. So `source` is mandatory on every answer, citations are empty whenever
-`source` is `general`, and the two render differently in the UI.
+cannot tell what is verified. So `source` is mandatory on every answer, and the two render
+differently in the UI.
 
-**Safety carve-out.** Brakes, airbags, restraints, towing and jacking are answered from the manual or
-escalated — never from general knowledge. Improvising on these is the one place where a helpful
-guess is worse than a handoff. Reversible if the client wants it otherwise.
+**Citations are typed, not merely present or absent.** The original rule — citations empty whenever
+`source` is `general` — threw away provenance the system has. A web-sourced answer carries a URL, and
+hiding it makes the answer *less* checkable than it needs to be.
+
+| Type | Pill shows | Click | Emitted when |
+|---|---|---|---|
+| `page` | `p. 137` | jumps the PDF pane | the manual was used |
+| `web` | the source domain | opens the URL | web search was used |
+
+A `page` citation is never emitted for content the manual did not supply, and the PDF pane never
+responds to a `web` citation. The two must be visually distinct — that difference is the guard, not
+styling. If the pills look alike we have rebuilt the exact failure this decision exists to prevent.
+
+**Safety carve-out, defined in configuration rather than code.** Topics where a wrong answer can
+injure someone are answered from the manual or escalated, never improvised from general knowledge.
+Which topics those are is corpus knowledge, so it lives in `backend/.env` as `SAFETY_TOPICS`,
+alongside the `DOMAIN_DESCRIPTION` that is already there. Code stays free of manual-specific strings,
+and the client — who knows their own domain — owns the list.
+
+**Rejected: deriving the list from the documents.** The first version of this decision named brakes,
+airbags, restraints, towing and jacking directly, which violates the document-agnostic rule in
+`AGENTS.md`. The replacement attempt was to detect hazards from the manuals' own markers, since both
+use *Danger*, *Warning*, *Caution* and *Attention*. Measured, it carries no signal: mean marker
+density across the top six passages is 23% for `safety` questions, 24% for ordinary `procedure`
+questions, and 42% for *"write me a poem about the sea"* — which is simply the corpus base rate,
+because roughly 30% of all chunks contain hazard language. Numbers in `docs/build-log.md`, Slice 5.
 
 ---
 
