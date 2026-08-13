@@ -36,18 +36,11 @@ def pages_of(meta) -> list[int]:
 
 
 def build_converter():
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.document_converter import DocumentConverter, PdfFormatOption
+    """The app's converter, not a copy. A local copy missed TORCHDYNAMO_DISABLE and broke."""
+    sys.path.append(str(REPO_ROOT / "backend"))
+    from app.providers.docling_parser import _build_converter
 
-    options = PdfPipelineOptions()
-    options.do_ocr = False
-    options.do_table_structure = True
-    options.table_structure_options.do_cell_matching = True
-
-    return DocumentConverter(
-        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
-    )
+    return _build_converter()
 
 
 def main() -> None:
