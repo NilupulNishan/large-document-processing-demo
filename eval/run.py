@@ -3,22 +3,19 @@ Retrieval quality against eval/questions.jsonl. This is the test suite for this 
 
     uv run --project backend python eval/run.py
 
-Reports fusion order against reranked order over the same candidates, so the reranker's
-contribution is isolated. Routing accuracy is not reported yet — the gate does not exist.
+Routing accuracy is not reported yet — the gate does not exist. Rows with no expected
+pages are scored only for their top relevance score, which is what will calibrate it.
 """
 
 import json
 import sys
-import time
 from collections import defaultdict
 from pathlib import Path
 
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
-from app.config import GATE_HIGH, GATE_LOW, RERANK_CANDIDATES  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
-from app.providers.reranker import score  # noqa: E402
 
 QUESTIONS = Path(__file__).parent / "questions.jsonl"
 CUTOFFS = (1, 3, 5, 10)
@@ -38,57 +35,52 @@ def report(title: str, ranks: list[int | None]) -> None:
         f"@{k} {sum(1 for r in ranks if r and r <= k) / len(ranks):4.0%}" for k in CUTOFFS
     )
     mrr = sum(1 / r for r in ranks if r) / len(ranks)
-    print(f"  {title:26} n={len(ranks):3}  {recalls}   MRR {mrr:.3f}")
+    print(f"  {title:30} n={len(ranks):3}  {recalls}   MRR {mrr:.3f}")
 
 
 def main() -> None:
     rows = [json.loads(line) for line in QUESTIONS.read_text(encoding="utf-8").splitlines()]
-    started = time.perf_counter()
 
     for row in rows:
-        hits = search(
-            row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
+        row["hits"] = search(
+            row["manual"], row["question"], embed_query(row["question"]), limit=max(CUTOFFS)
         )
-        scores = score(row["question"], [h["text"] for h in hits])
-        ordered = [h for _, h in sorted(zip(scores, hits, strict=True), key=lambda p: -p[0])]
-
-        expected = set(row["expected_pages"])
-        row["fusion_rank"] = hit_rank(hits, expected)
-        row["rerank_rank"] = hit_rank(ordered, expected)
-        row["top_score"] = max(scores) if scores else 0.0
+        row["rank"] = hit_rank(row["hits"], set(row["expected_pages"]))
+        row["top_score"] = row["hits"][0]["_relevance_score"] if row["hits"] else 0.0
 
     grounded = [r for r in rows if r["expected_pages"]]
+    ungrounded = [r for r in rows if not r["expected_pages"]]
 
-    print(f"\nRetrieval — {len(grounded)} grounded questions, {RERANK_CANDIDATES} candidates\n")
-    report("fusion only", [r["fusion_rank"] for r in grounded])
-    report("+ cross-encoder", [r["rerank_rank"] for r in grounded])
-
-    by_kind: dict[str, list[tuple[int | None, int | None]]] = defaultdict(list)
+    by_manual: dict[str, list[int | None]] = defaultdict(list)
+    by_kind: dict[str, list[int | None]] = defaultdict(list)
     for row in grounded:
-        by_kind[row["kind"]].append((row["fusion_rank"], row["rerank_rank"]))
+        by_manual[row["manual"].replace("-owner-manual-en", "")].append(row["rank"])
+        by_kind[row["kind"]].append(row["rank"])
 
-    print("\nby kind, reranked\n")
-    for kind, pairs in sorted(by_kind.items()):
-        report(kind, [r for _, r in pairs])
+    print(f"\nRetrieval — {len(grounded)} grounded questions\n")
+    report("overall", [r["rank"] for r in grounded])
+    print()
+    for title, values in sorted(by_manual.items()):
+        report(title, values)
+    print()
+    for title, values in sorted(by_kind.items()):
+        report(title, values)
 
-    moved = [(r["fusion_rank"], r["rerank_rank"], r) for r in grounded]
-    worse = [(f, k, r) for f, k, r in moved if f and k and k > f]
-    better = [(f, k, r) for f, k, r in moved if f and k and k < f]
-    print(f"\nreranking moved {len(better)} questions up, {len(worse)} down")
-    for f, k, row in sorted(worse, key=lambda t: t[1] - t[0], reverse=True)[:5]:
-        print(f"  down {f}->{k}  {row['id']}  {row['question']}")
+    misses = [r for r in grounded if r["rank"] is None]
+    if misses:
+        print(f"\nMissed entirely ({len(misses)}):\n")
+        for row in misses:
+            got = [h["pages_printed"] or h["pages_pdf"] for h in row["hits"][:3]]
+            print(f"  {row['id']}  {row['question']}")
+            print(f"       expected {row['expected_pages']}  got {got}")
 
-    print("\nGate — top reranker score per question\n")
-    for row in rows:
-        if not row["expected_pages"]:
-            band = "HIGH" if row["top_score"] > GATE_HIGH else "grader"
-            band = "LOW" if row["top_score"] < GATE_LOW else band
-            print(f"  {row['id']}  {row['top_score']:+7.2f}  {band:6} {row['expected_route']}")
+    print("\nTop score where the manual should not answer — calibrates the gate\n")
+    for row in ungrounded:
+        print(f"  {row['id']}  {row['top_score']:.4f}  {row['expected_route']:8} {row['question']}")
 
-    in_band = [r for r in grounded if GATE_LOW <= r["top_score"] <= GATE_HIGH]
-    print(f"\n  grounded needing a grader call: {len(in_band)}/{len(grounded)}")
-    print(f"  bands GATE_HIGH {GATE_HIGH:+.2f}  GATE_LOW {GATE_LOW:+.2f}")
-    print(f"\n{(time.perf_counter() - started) / len(rows) * 1000:.0f} ms per question end to end")
+    scores = sorted(r["top_score"] for r in grounded)
+    median = scores[len(scores) // 2]
+    print(f"\n  grounded rows score {scores[0]:.4f}–{scores[-1]:.4f}, median {median:.4f}")
 
 
 if __name__ == "__main__":
