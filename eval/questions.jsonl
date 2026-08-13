@@ -1,0 +1,44 @@
+{"id": "bj30-01", "question": "How do I pair my phone with the car's bluetooth?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [89, 90], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-02", "question": "What engine oil does it take and how many litres?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [276], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-03", "question": "I have a flat tyre, how do I repair it?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [253, 254, 255], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-04", "question": "How do I check and correct the tyre pressure?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [245, 246, 247], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-05", "question": "The airbag warning light is on. What does that mean?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [74, 75, 120], "expected_route": "manual", "kind": "symptom"}
+{"id": "bj30-06", "question": "How do I fit a child seat using the ISOFIX anchor points?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [54, 55], "expected_route": "manual", "kind": "safety"}
+{"id": "bj30-07", "question": "How tall and how wide is the vehicle?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [269, 270], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-08", "question": "The battery is dead. How do I jump start it from another car?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [255, 256, 257, 258], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-09", "question": "I hear a squealing noise when I brake. What is it?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [134, 135], "expected_route": "manual", "kind": "symptom"}
+{"id": "bj30-10", "question": "How do I switch on adaptive cruise control?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [146, 147], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-11", "question": "Where do I find the VIN?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [263, 264, 265], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-12", "question": "Which fuse protects the air blower?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [233, 234, 237, 238, 239], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-13", "question": "How does camping mode work?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [102, 103, 104, 105], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-14", "question": "The car has broken down and needs towing. What do I need to know?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [259, 260, 261, 262], "expected_route": "manual", "kind": "safety"}
+{"id": "bj30-15", "question": "How do I change the wiper blades?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [215, 216], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-16", "question": "How often should the car be serviced?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [210, 211, 212, 213, 214], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-17", "question": "Can I drive through water, and how deep?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [130, 131, 132], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-18", "question": "How do I fold the rear seats flat?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [49, 50, 51, 52], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-19", "question": "A tyre pressure warning came up on the dashboard. What should I do?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [126, 127, 128], "expected_route": "manual", "kind": "symptom"}
+{"id": "bj30-20", "question": "How do I open the tailgate if the power fails?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [255, 256], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-21", "question": "What is the correct seating position for the driver?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [36, 37, 38, 39], "expected_route": "manual", "kind": "safety"}
+{"id": "bj30-22", "question": "How do I use the SOS emergency call button?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [251, 252], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-01", "question": "How do I check the tyre pressure?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [233, 234], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-02", "question": "What oil specification and how much does it hold?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [263], "expected_route": "manual", "kind": "spec"}
+{"id": "x55-03", "question": "A tyre burst while I was driving. What should I do?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [230, 231], "expected_route": "manual", "kind": "safety"}
+{"id": "x55-04", "question": "How do I fit the spare wheel?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [244, 245, 246, 247, 248], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-05", "question": "How do I turn cruise control on and off?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [130, 131], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-06", "question": "What does the low fuel warning lamp mean?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [113, 114], "expected_route": "manual", "kind": "symptom"}
+{"id": "x55-07", "question": "How do I switch off ESP?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [122, 123], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-08", "question": "How does hill descent control work?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [127, 128], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-09", "question": "How do I open the fuel filler flap and refuel?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [173], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-10", "question": "I accidentally put diesel in. What now?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [174], "expected_route": "manual", "kind": "safety"}
+{"id": "x55-11", "question": "How do I use the reversing camera?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [178, 179], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-12", "question": "How deep can I drive through water?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [168], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-13", "question": "What does the tyre pressure monitoring fault alarm mean?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [118], "expected_route": "manual", "kind": "symptom"}
+{"id": "x55-14", "question": "How do I rotate the tyres?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [232, 233], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-15", "question": "What should I do before driving in winter?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [169], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-16", "question": "How do I use the automatic parking assist?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [183, 184, 185, 186], "expected_route": "manual", "kind": "procedure"}
+{"id": "gen-01", "question": "How do I pair my phone with bluetooth?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "general", "kind": "absent"}
+{"id": "gen-02", "question": "Where is my nearest BAIC service centre?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "general", "kind": "absent"}
+{"id": "gen-03", "question": "Are there any open safety recalls for this model?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "general", "kind": "absent"}
+{"id": "gen-04", "question": "How much does this car cost new?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "general", "kind": "absent"}
+{"id": "dec-01", "question": "What is the weather forecast for tomorrow?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "decline", "kind": "offtopic"}
+{"id": "dec-02", "question": "Write me a poem about the sea.", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "decline", "kind": "offtopic"}

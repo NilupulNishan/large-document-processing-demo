@@ -242,15 +242,20 @@ Retrieval was checked against five hand-written queries per manual. Clear hits:
 Printed page numbers are shown for BJ30 and PDF indices for X55, correctly reflecting that only one
 of the two has a detected offset. No query returned a row from the other manual.
 
-### Two misses, both the same cause
+### One miss, and one that turned out not to be
 
 `what does the yellow engine warning light mean` returns turn-signal and particulate-filter passages
-on BJ30, under the heading `Attention`. `how do I pair a phone over bluetooth` on X55 returns
-navigation, USB and coolant-gauge passages.
+on BJ30, under the heading `Attention` — a chunk whose heading locates nothing. That is the problem
+D4 records and the contextual sentence in Slice 5 exists to fix. It is left as-is deliberately: this
+index is the **baseline** that Slice 4 measures and Slice 5 must beat.
 
-Both are chunks whose heading locates nothing — the problem D4 records and the contextual sentence in
-Slice 5 exists to fix. They are left as-is deliberately: this index is the **baseline** that Slice 4
-measures and Slice 5 must beat. Fixing them now would leave nothing to compare against.
+`how do I pair a phone over bluetooth` returned navigation and coolant-gauge passages on X55, and was
+first recorded here as a second miss. It is not. Grepping the source shows X55 has no pairing
+procedure anywhere — only incidental mentions of a Bluetooth module in a fuse table and on the
+instrument cluster. Retrieval returned weak matches because the content does not exist, which is the
+correct behaviour and a `general` route rather than a `manual` one. Found while labelling Slice 4,
+and a good argument for building the eval set from the source text rather than from what retrieval
+happens to return.
 
 Worth noting the heading paths seen here (`Tire Exchange > Replacement`) are produced by the Slice 2
 merge joining several headings by document frequency, not by a Docling hierarchy. Docling's own
@@ -264,4 +269,95 @@ headings remain single-level, as Slice 0 found.
 - [x] Both manuals indexed; re-indexing one leaves the other intact.
 - [x] Hybrid search returns correct pages for spec-table and procedure queries.
 - [x] Search scoped to one manual never returns another's rows.
-- [ ] Recall@10 measured against labelled questions — Slice 4.
+- [x] Recall@10 measured against labelled questions — Slice 4.
+
+---
+
+## Slice 4 — labelled questions and the eval harness
+
+### Outcome
+
+44 labelled questions and `eval/run.py`. Baseline retrieval measured. The run also produced a finding
+that changes the design: the gate cannot be built on fusion scores.
+
+### Why
+
+Every claim about retrieval quality so far has been an anecdote from five hand-typed queries. A
+proposal needs a number, and Slice 5 needs a baseline to beat.
+
+### How the labels were made
+
+Pages were read out of the source JSONL — the topic map of every chunk's heading, pages and opening
+words — and then confirmed with a lexical grep for a distinctive phrase. **Not** from what retrieval
+returned. Labelling from search output would have produced 100% recall by construction.
+
+That process immediately caught one error already recorded in Slice 3: the X55 bluetooth "miss" was
+not a miss, because X55 has no pairing procedure. It is now `gen-01`, expecting the `general` route.
+
+### Commands
+
+```bash
+uv run --project backend python eval/run.py
+```
+
+### Observed
+
+```
+Retrieval — 38 grounded questions
+
+  overall              n= 38  @1  76% @3  95% @5  97% @10 100%   MRR 0.866
+
+  baic-bj30-e30        n= 22  @1  68% @3  91% @5  95% @10 100%   MRR 0.814
+  baic-x55-ii          n= 16  @1  88% @3 100% @5 100% @10 100%   MRR 0.938
+
+  procedure            n= 22  @1  77% @3  95% @5  95% @10 100%   MRR 0.871
+  safety               n=  5  @1 100% @3 100% @5 100% @10 100%   MRR 1.000
+  spec                 n=  6  @1  33% @3  83% @5 100% @10 100%   MRR 0.625
+  symptom              n=  5  @1 100% @3 100% @5 100% @10 100%   MRR 1.000
+```
+
+Recall@10 is saturated, so it will not show whether Slice 5 helps. **Recall@1 (76%) and MRR (0.866)
+are the numbers to move.**
+
+`spec` is the weakest category by a wide margin — 33% at rank 1 against 100% for symptom and safety.
+These are exact-value lookups (oil capacity, vehicle dimensions, fuse ratings) which live in tables,
+and the Slice 2 known issue about matrix tables serialising badly sits directly underneath that.
+
+### The finding: RRF scores cannot calibrate the gate
+
+The harness prints the top score for questions the manual should not answer, expecting a usable
+threshold. There is none.
+
+| Row | Score | Should route to |
+| --- | ---: | --- |
+| grounded questions | 0.0302 – 0.0328 | `manual` |
+| `dec-02` write me a poem about the sea | 0.0323 | `decline` |
+| `gen-01` pair my phone (absent from X55) | 0.0325 | `general` |
+| `gen-02` nearest service centre | 0.0296 | `general` |
+| `gen-03` open safety recalls | 0.0164 | `general` |
+
+RRF scores rank position, not relevance: `1/(60+1) = 0.0164` is one list ranking a chunk first, and
+`0.0328` is both doing so — which is exactly the observed ceiling. Something always ranks first, so a
+poem request scores like a grounded question. Two of six ungrounded rows sit inside the grounded
+range and no threshold separates them.
+
+D2 and D3 are amended. The gate reads cross-encoder output only; fusion scores order candidates and
+never decide a route. This makes the reranker a prerequisite for the gate rather than a later
+refinement, and it is the same class of mistake as the previous project's — routing on a number that
+does not mean what it appears to mean.
+
+### Caveat on the numbers
+
+The questions and their labels were written from the same reading of the corpus, so they share
+vocabulary with it more than a real user's phrasing would. Colloquial rows were included
+deliberately — *"I hear a squealing noise when I brake"*, *"I accidentally put diesel in"* — and
+those scored at rank 1. Treat 100% Recall@10 as a floor established under favourable phrasing, not as
+a claim about live traffic.
+
+### Checkpoint
+
+- [x] 44 labelled questions across both manuals, pages verified against source text.
+- [x] `eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and question kind.
+- [x] Baseline recorded for Slice 5 to beat.
+- [x] Questions carry `expected_route` ready for routing accuracy once the gate exists.
+- [ ] Routing accuracy — needs the gate and the cross-encoder.

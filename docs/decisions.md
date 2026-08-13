@@ -33,6 +33,11 @@ measured retrieval evidence makes that class of failure structurally impossible.
 This is the Corrective RAG pattern, which the literature identifies as the most production-tested of
 the agentic RAG family. The recommended adoption order is CRAG → Adaptive → Self-RAG. We stop at CRAG.
 
+**Which score the gate reads is not a detail.** It reads cross-encoder output. Fusion scores look
+like a relevance signal and are not one — see the measurement in D3. Building the gate before the
+reranker exists would reproduce the previous project's failure in a new form: a routing decision made
+on a number that does not mean what it appears to mean.
+
 ---
 
 ## D3 — Hybrid retrieval with RRF, then a cross-encoder reranker
@@ -50,6 +55,20 @@ OpenSearch, Azure AI Search and Weaviate.
 
 **On CPU cost.** The reranker adds roughly 300 ms against an answer call of 2–5 s — about 7% of total
 latency. Use `bge-reranker-base` or a MiniLM cross-encoder via ONNX with `use_fp16=False`.
+
+**Measured — the cross-encoder is required for the gate, not an accuracy bonus.** This decision
+presented reranking as a recall improvement worth 300 ms. Slice 4 shows it is load-bearing for D2.
+
+RRF scores rank *position*, not relevance. A chunk ranked first by both retrievers scores
+`1/(60+1) × 2 = 0.0328` whatever it actually says, and something is always ranked first. Measured
+across the eval set: grounded questions score 0.0302–0.0328, while *"write me a poem about the sea"*
+scores 0.0323 and *"where is my nearest service centre"* scores 0.0296. Two of six questions the
+manual cannot answer land inside the grounded range. No threshold on this number can separate them,
+so a gate reading fusion scores would route a poem request to the manual.
+
+A cross-encoder scores the query and passage together and returns a genuine relevance judgement, so
+the gate reads **reranker output only**. Fusion scores order candidates; they never decide a route.
+Numbers in `docs/build-log.md`, Slice 4.
 
 ---
 

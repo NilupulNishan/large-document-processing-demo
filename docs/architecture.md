@@ -68,8 +68,10 @@ page numbers and headings.
 **3 · rerank** — Local cross-encoder (ONNX, CPU) scores the top-30 candidates and returns the best 6.
 Roughly 300 ms — small against the answer call, and invisible to the user because the answer streams.
 
-**4 · gate** — Reads reranker scores. The assistant does not dead-end: a weak manual result downgrades
-the *source* of the answer, it does not refuse the question.
+**4 · gate** — Reads **cross-encoder** scores from step 3, never the RRF fusion scores from step 2.
+Fusion scores rank position rather than relevance, and measurably cannot separate a grounded question
+from a request for a poem (D3). The assistant does not dead-end: a weak manual result downgrades the
+*source* of the answer, it does not refuse the question.
 
 | Condition | Route | Answer source |
 |---|---|---|
@@ -157,18 +159,21 @@ Getting this backwards shows the wrong page to the user.
 | PDF pane | Renders the cited page beside the answer; citations navigate it |
 | Operator inbox | Lists open escalations; opens the full handoff package for one (D12) |
 
-## Evaluation — (not built)
+## Evaluation
 
-Slice 4. `eval/questions.jsonl` — one row per labelled question:
+`eval/questions.jsonl` — 44 labelled questions, one row each:
 
 ```json
-{"question": "...", "manual": "...", "expected_pages": [137, 138], "expected_route": "manual"}
+{"id": "bj30-01", "question": "...", "manual": "...", "expected_pages": [89, 90],
+ "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` is one of `manual`, `partial`, `general`, `decline`, `escalate`.
+`expected_route` is one of `manual`, `partial`, `general`, `decline`, `escalate`. `kind` is
+`procedure`, `spec`, `symptom`, `safety`, `absent` or `offtopic`, so weakness can be located rather
+than just observed. Pages are labelled from the source text, never from retrieval output.
 
-`eval/run.py` reports Recall@10 and a routing-accuracy table. It exercises ingestion, retrieval,
-reranking and the gate — not the answer prose.
+`eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind. Routing accuracy is
+**(not built)** — it needs the gate. Answer prose is never scored.
 
 ## Deliberate omissions
 
