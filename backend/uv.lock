@@ -751,6 +751,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "docling" },
+    { name = "pypdfium2" },
     { name = "tiktoken" },
 ]
 
@@ -762,6 +763,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "docling", specifier = "==2.119.0" },
+    { name = "pypdfium2", specifier = "==5.12.1" },
     { name = "tiktoken", specifier = "==0.13.0" },
 ]
 
