@@ -1,0 +1,6 @@
+# Root config so one rule set governs backend/app, scripts/ and playground/ alike.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]

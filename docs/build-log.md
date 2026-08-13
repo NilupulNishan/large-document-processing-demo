@@ -105,8 +105,8 @@ are an argument for keeping dense retrieval alongside BM25 rather than relying o
 
 ### Outcome
 
-Chunks now sit in the size band the retrieval literature identifies as best. The BJ30 manual goes
-from 730 fragments at a median of 68 tokens to 208 windows at a median of 393.
+Chunks now sit in the size band the retrieval literature identifies as best. Both manuals are
+ingested: 1,314 fragments at a median of 68 tokens become 475 windows at a median of 337.
 
 ### Why
 
@@ -125,23 +125,37 @@ of small callout boxes and list items with nothing to merge against. The fix has
 uv run --project backend python playground/check_merge.py
 
 # full re-ingest with merging in the pipeline
-uv run --project backend python scripts/ingest.py data/manuals/<file>.pdf
+uv run --project backend python scripts/ingest.py data/manuals/baic-bj30-e30-owner-manual-en.pdf
+uv run --project backend python scripts/ingest.py data/manuals/baic-x55-ii-owner-manual-en.pdf
 ```
 
 ### Observed
 
-| | before | after |
-| --- | ---: | ---: |
-| chunks | 730 | 208 |
-| median tokens | 68 | 393 |
-| p25 / p75 | 40 / 125 | 320 / 432 |
-| p95 | 338 | 543 |
-| under 100 tokens | 67% | 1% |
-| within 200–512 tokens | 12% | 86% |
+Both manuals, measured from the written JSONL rather than in flight. The token counts the ingest
+prints are taken before normalisation; these are after it, so they are the sizes that get embedded.
 
-`max` stays at 2838 tokens and one chunk still spans four pages. Merging only joins, never splits, so
-a pre-existing oversized chunk passes through unchanged. At p95 = 543 these are rare enough to leave
-alone until the eval harness says otherwise.
+| | BJ30 | X55 |
+| --- | ---: | ---: |
+| pages | 283 | 263 |
+| parse | 10.5 min (2.22 s/page) | 10.7 min (2.43 s/page) |
+| chunks before / after merge | 730 → 213 | 584 → 262 |
+| median tokens | 384 | 314 |
+| p25 / p75 | 308 / 420 | 238 / 351 |
+| p95 | 553 | 643 |
+| under 100 tokens | 2% | 4% |
+| within 200–512 tokens | 85% | 76% |
+| headings present | 213/213 | 261/262 |
+| printed page numbers | 213/213 | none — no offset detected |
+
+X55 sits a little lower and wider than BJ30 on every measure. It has no running header, so
+`detect_page_offset` returned `None` rather than guessing — the behaviour D6 was written for, now
+confirmed on a manual that lacks the feature entirely.
+
+Three chunks exceed the three-page cap: BJ30's maintenance schedule (p216–219) and technical
+parameters table (p277–280), and X55's table of contents (p5–11, 3,042 tokens). All three are single
+Docling chunks that were already oversized. Merging only joins, never splits, so they pass through
+untouched. At p95 = 553 and 643 they are rare enough to leave alone until the eval harness says
+otherwise.
 
 ### Two design points
 
@@ -155,17 +169,23 @@ occurs on 121 of 730 chunks and locates nothing, so it sinks below a real sectio
 Hardcoding a list of callout words would have worked on this manual and broken on the next one, which
 the document-agnostic rule in `AGENTS.md` forbids.
 
-### Known issue
+### Known issues
 
-18 of 730 chunks (2.5%) contain mangled table text — the maintenance-schedule checkmark matrix
-serialises as `, Primary Maintenance = . ,` fragments. Technical Parameters chunks read cleanly, so
-this is specific to matrix-style tables rather than tables in general. Left alone until the eval
-harness shows those pages retrieving badly.
+**Matrix tables serialise badly.** 18 of BJ30's 730 pre-merge chunks (2.5%) contain mangled table
+text — the maintenance-schedule checkmark matrix comes out as `, Primary Maintenance = . ,`
+fragments. Technical Parameters chunks read cleanly, so this is specific to matrix-style tables
+rather than tables in general.
+
+**X55's table of contents is one 3,042-token chunk.** It lists every section name in the manual, so
+it is lexically close to a great many queries while answering none of them. If it starts winning
+retrieval slots, the fix is to drop front-matter at ingest, not to special-case the text.
+
+Both are left alone until the eval harness shows those pages retrieving badly.
 
 ### Checkpoint
 
 - [x] Merge step written and wired into `ingest.py`.
 - [x] Median chunk size inside the target band.
 - [x] Page span capped to match the citation requirement.
-- [ ] Corpus re-ingested with merging applied.
-- [ ] Second manual ingested.
+- [x] Corpus re-ingested with merging applied.
+- [x] Second manual ingested — 475 chunks across 546 pages.
