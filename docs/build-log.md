@@ -460,5 +460,34 @@ service at ~$73/month and would replace LanceDB, against D5.
 - [x] Scores separate grounded from unanswerable questions.
 - [x] `GATE_HIGH` and `GATE_LOW` derived from the eval set, not guessed.
 - [x] Latency measured and reduced 19,111 → 1,249 ms.
-- [ ] Reranking wired into `eval/run.py` to measure Recall@1 against the 76% baseline.
+- [x] Reranking wired into `eval/run.py` and measured against the fusion baseline.
 - [ ] Latency under 500 ms.
+
+### What reranking is worth
+
+`eval/run.py` now scores fusion order against reranked order over the same 12 candidates, so the
+reranker's contribution is isolated rather than confounded with retrieval.
+
+| | Recall@1 | @3 | @10 | MRR |
+| --- | ---: | ---: | ---: | ---: |
+| fusion only | 76% | 95% | 100% | 0.862 |
+| + cross-encoder | **87%** | 97% | 100% | **0.919** |
+
++11pp Recall@1, close to the +12.1pp Recall@5 D3 cites. Six questions moved up, three down; the worst
+regression was `bj30-20` (tailgate emergency release) falling from rank 6 to 10.
+
+`spec` went from **33% to 100%** at rank 1 — the category Slice 4 measured worst. Note the tension
+this exposes: `bj30-02` is a `spec` question that now ranks *first* among its candidates while still
+scoring −7.21 in absolute terms. Ranking quality and absolute confidence are different signals, and
+the design uses each for the right job — order for the answer's top 6, absolute score for the gate.
+
+### Gate bands need margin, not the observed extremes
+
+Set to the exact observed values (`HIGH -4.44`, `LOW -7.21`), `eval/run.py` reported 2 grounded
+questions in the ambiguous band where `check_rerank.py` reported 3. The missing one was `bj30-02`,
+whose true score is fractionally below the rounded −7.21 — so it fell *under* `GATE_LOW` and would
+have been confidently declined despite being answerable from the manual.
+
+Bands moved to `HIGH -4.1`, `LOW -7.5`. No unanswerable question is now routed confidently to the
+manual; all six are `grader` or `LOW`. Widening costs a grader call, narrowing misroutes, so the
+asymmetry decides the direction.

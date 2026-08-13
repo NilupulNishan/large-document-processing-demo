@@ -33,10 +33,12 @@ RERANK_CANDIDATES = 12
 RERANK_KEEP = 6
 RERANK_MAX_TOKENS = 512
 
-# Gate bands, read off the reranker score distribution. Above HIGH nothing ungrounded
-# has appeared; below LOW nothing grounded has. Between them the grader decides (D2).
-GATE_HIGH = -4.44
-GATE_LOW = -7.21
+# Gate bands, read off the reranker score distribution: observed ungrounded max -4.44,
+# grounded min -7.21. Set outside those, not on them — pinned to the exact extremes, the
+# lowest grounded question falls below LOW and gets declined. Widening only costs a
+# grader call; narrowing misroutes. Between the bands the grader decides (D2).
+GATE_HIGH = -4.1
+GATE_LOW = -7.5
 
 # Merge targets. Rationale and measurements in docs/build-log.md, Slice 2.
 TARGET_CHUNK_TOKENS = 450
