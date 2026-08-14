@@ -202,6 +202,18 @@ connection management. The existing frontend's `useChatSocket` hook is adapted r
 **Rule.** Step events must describe work that actually happened. No invented stages, no artificial
 delays. If a step is skipped, no event is emitted for it.
 
+**Settled at build time: streaming and structured output are not in conflict.** The answer step needs
+both — a schema, so `format`, `cited` and `resolved` come back typed, and token streaming, so the
+prose appears immediately. `chat.completions.parse()` gives the first and blocks; the concern was that
+having both meant two calls or giving one up.
+
+Measured against `openai==3.0.0` rather than assumed: `chat.completions.stream()` accepts the same
+`response_format` and emits the raw JSON token by token. `event.parsed` is no help — it populates a
+field only once its string literal closes — but the raw deltas are usable. `complete_stream()` finds
+the `"answer":"` marker in the accumulated buffer and runs `json.loads` on the partial value, which
+unescapes `\n`, `\"` and `\uXXXX` for free and simply fails on a mid-escape buffer until the next
+delta completes it. One call, typed result, streamed prose.
+
 ---
 
 ## D10 — Reuse the existing frontend

@@ -11,6 +11,8 @@ REPO_ROOT = BACKEND_DIR.parent
 load_dotenv(BACKEND_DIR / ".env")
 
 CHUNKS_DIR = REPO_ROOT / "data" / "chunks"
+MANUALS_DIR = REPO_ROOT / "data" / "manuals"
+DB_PATH = REPO_ROOT / "data" / "app.db"
 LANCEDB_DIR = REPO_ROOT / "data" / "lancedb"
 MODELS_DIR = REPO_ROOT / "data" / "models"
 CHUNKS_TABLE = "chunks"

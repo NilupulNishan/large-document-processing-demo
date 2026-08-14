@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,17 @@ class PipelineContext(BaseModel):
     # What actually ran, for the SSE step events. No step may append without running (D9).
     events: list[tuple[str, str]] = []
 
+    # Set by the API so events leave as they happen; None for eval and playground runs.
+    sink: Callable[[str, dict], None] | None = Field(default=None, exclude=True)
+
     def emit(self, step: str, label: str) -> None:
         self.events.append((step, label))
+        if self.sink:
+            self.sink("step", {"step": step, "label": label})
+
+    def token(self, text: str) -> None:
+        if self.sink:
+            self.sink("token", {"text": text})
 
 
 class PipelineStep(Protocol):
@@ -64,8 +73,13 @@ class Pipeline:
     def __init__(self, steps: Sequence[PipelineStep]) -> None:
         self.steps = list(steps)
 
-    def run(self, question: str, manual: str) -> PipelineContext:
-        ctx = PipelineContext(question=question, manual=manual)
+    def run(
+        self,
+        question: str,
+        manual: str,
+        sink: Callable[[str, dict], None] | None = None,
+    ) -> PipelineContext:
+        ctx = PipelineContext(question=question, manual=manual, sink=sink)
         for index, step in enumerate(self.steps, start=1):
             logger.info("[%d/%d] %s", index, len(self.steps), step.name)
             ctx = step.run(ctx)

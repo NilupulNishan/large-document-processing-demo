@@ -1,5 +1,7 @@
 """Azure OpenAI boundary. SDK types stop here; callers receive plain lists."""
 
+import json
+from collections.abc import Callable
 from functools import cache
 
 from pydantic import BaseModel
@@ -71,6 +73,67 @@ def complete[T: BaseModel](system: str, user: str, schema: type[T]) -> T:
         response_format=schema,
     )
     parsed = response.choices[0].message.parsed
+    if parsed is None:
+        raise RuntimeError(f"{AZURE_OPENAI_CHAT_DEPLOYMENT} returned no parseable output")
+    return parsed
+
+
+def _prose_so_far(buffer: str, field: str) -> str | None:
+    """The value of `field` as far as it has arrived, or None if it cannot be read yet.
+
+    Deltas carry raw JSON, so the string is still escaped and unterminated. Closing it and
+    handing it to json.loads unescapes \\n, \\" and \\uXXXX for free; mid-escape buffers
+    simply fail to parse and are skipped until the next delta completes them.
+    """
+    start = buffer.find(f'"{field}":"')
+    if start < 0:
+        return None
+    segment = buffer[start + len(field) + 4 :]
+
+    # The first unescaped quote ends the value; anything after it belongs to other fields.
+    end, escaped = len(segment), False
+    for index, character in enumerate(segment):
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == '"':
+            end = index
+            break
+
+    try:
+        return json.loads(f'"{segment[:end]}"')
+    except json.JSONDecodeError:
+        return None
+
+
+def complete_stream[T: BaseModel](
+    system: str, user: str, schema: type[T], on_token: Callable[[str], None], field: str = "answer"
+) -> T:
+    """Structured completion that streams one field's prose as it arrives (D9)."""
+    if not AZURE_OPENAI_CHAT_DEPLOYMENT:
+        raise RuntimeError("Missing in backend/.env: AZURE_OPENAI_CHAT_DEPLOYMENT")
+
+    buffer, sent = "", ""
+    with _client().chat.completions.stream(
+        model=AZURE_OPENAI_CHAT_DEPLOYMENT,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        response_format=schema,
+    ) as stream:
+        for event in stream:
+            if event.type != "content.delta":
+                continue
+            buffer += event.delta
+            prose = _prose_so_far(buffer, field)
+            if prose is not None and prose != sent:
+                on_token(prose[len(sent) :])
+                sent = prose
+
+        parsed = stream.get_final_completion().choices[0].message.parsed
+
     if parsed is None:
         raise RuntimeError(f"{AZURE_OPENAI_CHAT_DEPLOYMENT} returned no parseable output")
     return parsed

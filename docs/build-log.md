@@ -625,3 +625,97 @@ and `search()` now requires `limit` rather than defaulting it.
 - [x] Every `general` answer carries its disclaimer deterministically.
 - [ ] `resolve_query`, `web_search`, `escalate`.
 - [ ] Streaming, transport, persistence.
+
+---
+
+## Slice 7 — streamed answers, SSE transport, session persistence
+
+### Outcome
+
+`POST /chat` streams step events and answer tokens over SSE, and conversations persist to SQLite and
+reopen with their citations intact. `playground/check_api.py` drives the real endpoints end to end.
+
+### Why
+
+The pipeline answered well and nothing could see it. Day 3 of five, and the frontend cannot start
+until there is an API to build against — so transport was the bottleneck for everything remaining,
+not the most interesting work available.
+
+### Streaming and structured output are not in conflict
+
+D9 promised streamed tokens; the answer step used `chat.completions.parse()`, which blocks. Rather
+than assume which had to give, this was measured first: `chat.completions.stream()` takes the same
+`response_format` and emits raw JSON token by token — `'The'`, `' front'`, `' tyre'`. `event.parsed`
+is useless for it, populating a field only once the string literal closes, but the raw deltas are not.
+
+`complete_stream()` accumulates the buffer, finds `"answer":"`, and hands the partial value to
+`json.loads`. That unescapes `\n`, `\"` and `\uXXXX` for free and fails cleanly mid-escape, so the
+delta is skipped until the next one completes it. Ten edge cases were checked directly — empty value,
+embedded quotes, a value ending in a backslash, a dangling escape, a unicode escape — because the
+naive version got two of them wrong: it read `segment[index - 1]` at index 0, which wraps to the end
+of the string.
+
+### The pipeline stayed synchronous
+
+`PipelineContext` gained an optional `sink`, and `Pipeline.run()` an optional argument. The API runs
+the pipeline on a worker thread whose sink pushes to a `queue.Queue` and drains that queue into the
+response. That, not async, is what makes a step event reach the browser mid-run — and `eval/run.py`
+and the playground scripts pass no sink and are untouched. Retrieval after the change: Recall@1 87%,
+MRR 0.919, identical.
+
+### Commands
+
+```bash
+uv add --project backend fastapi uvicorn pydantic
+uv run --project backend --locked --no-sync python scripts/index.py data/chunks/<file>.jsonl
+uv run --project backend --locked --no-sync uvicorn app.api:app --app-dir backend
+uv run --project backend --locked --no-sync python playground/check_api.py
+```
+
+### Observed
+
+Four questions over one session, then reopened. Times are from request start.
+
+| Question | Retrieve | Rerank | Gate | First token | Done | Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Bluetooth pairing | 2.09 s | 0.81 s | — | 2.89 s | 5.44 s | 137 |
+| Engine oil | 0.36 s | 1.06 s | 0.96 s | 2.38 s | 3.88 s | 52 |
+| Service centre | 0.49 s | 0.89 s | 1.16 s | 2.55 s | 5.16 s | 163 |
+| Weather | 0.49 s | 0.78 s | 0.93 s | 2.19 s | 2.20 s | 1 |
+
+No `gate` event on the first question — it scored above `GATE_HIGH`, so no grader ran and none was
+announced. That is the D9 rule holding in the transport, not just in the pipeline.
+
+Reopening returned all eight messages with `source` and page citations intact.
+
+### The cold start was landing on the first question
+
+The first run showed 8.66 s to first token against ~2.4 s for the rest, all of it a 6.64 s rerank —
+the ONNX model loading lazily on first use. In a demo that penalty lands on the first question anyone
+asks, which is the worst possible place for it. The cross-encoder is now loaded in FastAPI's
+`lifespan` startup; first-question rerank fell to 0.81 s and first token to 2.89 s.
+
+### A fragility the work exposed
+
+`data/app.db` was deleted mid-testing, which also destroyed the `manuals` rows. Recovering them meant
+re-running `index.py` — which re-embeds, at real cost — to rewrite three columns derivable from the
+JSONL and the PDF. Derived state should not be expensive to rebuild, so `index.py --register-only`
+now rewrites the row in seconds without embedding.
+
+### Corrections to the docs
+
+`docs/architecture.md` described a layering that was never built — `routes.py`, `service.py`,
+`repository.py`. What exists is `api.py` for HTTP and SSE, `db.py` for SQLite, and the pipeline for
+orchestration; a service module would forward calls and hold nothing. It also listed
+`unresolved_streak` on `sessions`, which arrives with `escalate` (D14), not now.
+
+### Checkpoint
+
+- [x] Prose streams token by token from a structured call, in one request.
+- [x] Step events reach the client while later steps are still running.
+- [x] A skipped grader emits no event.
+- [x] Sessions and messages persist; reopening restores citations.
+- [x] The reranker is warm before the first question.
+- [x] Retrieval unchanged — Recall@1 87%, MRR 0.919.
+- [ ] `resolve_query`, `web_search`, `escalate`.
+- [ ] Frontend.

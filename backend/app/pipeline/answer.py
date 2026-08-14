@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.config import DOMAIN_DESCRIPTION
 from app.pipeline.base import Answer, Citation, PipelineContext
-from app.providers.azure_openai import complete
+from app.providers.azure_openai import complete, complete_stream
 
 _SYSTEM = """You help a user with their {domain}.
 
@@ -71,12 +71,13 @@ class AnswerStep:
             return ctx
 
         if ctx.route == "decline":
+            refusal = (
+                f"That is outside what I can help with — I answer questions about "
+                f"{DOMAIN_DESCRIPTION}."
+            )
+            ctx.token(refusal)
             ctx.answer = Answer(
-                format="direct",
-                source="general",
-                answer=f"That is outside what I can help with — I answer questions about "
-                f"{DOMAIN_DESCRIPTION}.",
-                resolved=True,
+                format="direct", source="general", answer=refusal, resolved=True
             )
             ctx.emit(self.name, "Out of scope")
             return ctx
@@ -85,18 +86,25 @@ class AnswerStep:
         passages = ctx.passages if grounded else []
         excerpts = "\n\n".join(f"[{i}] {p['text']}" for i, p in enumerate(passages, 1))
 
-        draft = complete(
-            _SYSTEM.format(domain=DOMAIN_DESCRIPTION),
+        system = _SYSTEM.format(domain=DOMAIN_DESCRIPTION)
+        user = (
             f"{_GROUNDED if grounded else _UNGROUNDED}\n\n"
-            f"Question: {ctx.question}\n\n{('Passages:\n' + excerpts) if grounded else ''}",
-            Draft,
+            f"Question: {ctx.question}\n\n{('Passages:\n' + excerpts) if grounded else ''}"
         )
+
+        # The disclaimer leads the stream too, so it is on screen before the guidance is.
+        prefix = "" if grounded else _NOT_IN_MANUAL
+        if ctx.sink:
+            ctx.token(prefix)
+            draft = complete_stream(system, user, Draft, ctx.token)
+        else:
+            draft = complete(system, user, Draft)
 
         ctx.answer = Answer(
             format=draft.format,
             # Set here, never by the model. A wrong source label is the worst output (D13).
             source=ctx.route,
-            answer=draft.answer if grounded else _NOT_IN_MANUAL + draft.answer,
+            answer=prefix + draft.answer,
             citations=_citations(draft, passages),
             resolved=draft.resolved,
         )

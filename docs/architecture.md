@@ -6,9 +6,10 @@ If a component named here does not exist yet, it is marked **(not built)**.
 Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
-indexing. Of the online half, `retrieve`, `rerank`, `gate` and `answer` are built and run end to end
-from `playground/check_pipeline.py`. `resolve_query`, `web_search` and `escalate` are not, nor is the
-transport, the database or the UI. Each is marked **(not built)** below.
+indexing. Of the online half, `retrieve`, `rerank`, `gate` and `answer` are built, along with the SSE
+transport and the SQLite session store; `playground/check_api.py` drives them end to end.
+`resolve_query`, `web_search`, `escalate`, the `escalations` table and the UI are not built. Each is
+marked **(not built)** below.
 
 ## Two halves
 
@@ -30,10 +31,10 @@ flowchart TB
         head --> ctx["LLM context sentence<br/>gpt-5.4-nano — (not built)"]
         ctx --> embed[Azure text-embedding-3-large]
         embed --> lance[(LanceDB<br/>dense + full-text)]
-        jsonl --> sqlite[(SQLite — not built)]
+        jsonl --> sqlite[("SQLite — manuals row")]
     end
 
-    subgraph online["Online — pipeline built; FastAPI + SSE (not built)"]
+    subgraph online["Online — FastAPI, SSE"]
         q[User question] --> resolve["1 resolve_query<br/>(not built)"]
         resolve --> retrieve["2 retrieve"]
         retrieve --> rerank["3 rerank"]
@@ -91,8 +92,7 @@ call is the grader in the ambiguous band, and it returns a score, not a destinat
 **5 · web_search — (not built)** — Conditional. Runs only when the gate routes here. Tavily, scoped by
 the `DOMAIN_DESCRIPTION` config value. Results carry no page citations.
 
-**6 · answer** — One structured call returning the fields below. Streaming is **(not built)**; today
-the call blocks and the answer arrives whole.
+**6 · answer** — One structured, streamed call returning:
 
 ```
 format     direct | steps | troubleshoot | explanation
@@ -102,6 +102,11 @@ citations  [{ type: "page", page_pdf, page_printed, section }]
            [{ type: "web",  url, title }]
 resolved   true | false
 ```
+
+`source` is assigned in Python from the gate's route and is never accepted from the model, and the
+model cites by passage index which Python maps back to real pages — a hallucinated page number is not
+expressible. When `source` is `general` the disclaimer sentence is prepended in Python too, because
+asked for in the prompt it was supplied on one run and dropped on the next.
 
 `source` drives the UI. A `page` citation is emitted only for content the manual supplied; a `web`
 citation only for content web search supplied. The PDF pane responds to `page` citations and ignores
@@ -113,9 +118,18 @@ pills are how that happens (D13).
 `escalations` row and surfaces a reference number to the user. The gate already emits the `escalate`
 route; `AnswerStep` currently returns no answer for it.
 
-## Transport — (not built)
+## Transport
 
 `POST /chat` returns Server-Sent Events. FastAPI `StreamingResponse`; no broker, no WebSocket server.
+
+| Route | Purpose |
+|---|---|
+| `GET /manuals` | picker |
+| `GET /manuals/{id}/pdf` | the file the viewer pane renders |
+| `POST /sessions` | `{manual}` → a new session |
+| `GET /sessions` | history panel |
+| `GET /sessions/{id}` | one conversation with its messages and citations |
+| `POST /chat` | `{session_id, question}` → the stream below |
 
 ```
 event: step    {"step": "retrieve", "label": "Searching the manual"}
@@ -125,25 +139,39 @@ event: token   {"text": "..."}
 event: done    {"source": "manual", "citations": [...], "resolved": true}
 ```
 
+Plus `event: error`, because a stream that dies silently is indistinguishable from one still thinking.
+
 Step events describe work that actually happened. No invented stages, no artificial delays. A step
-that is skipped emits no event.
+that is skipped emits no event — above `GATE_HIGH` no grader runs, so no `gate` event is sent.
+
+The pipeline is synchronous by design. `POST /chat` runs it on a worker thread whose sink pushes to a
+`queue.Queue`, and the response generator drains that queue; that, not async, is what lets a step
+event reach the browser while the next step is still running. The eval harness and playground scripts
+pass no sink and are unaffected.
+
+The cross-encoder is loaded during FastAPI's `lifespan` startup. Left lazy it cost the first question
+~6.5 s — measured 8.66 s to first token cold against 2.89 s warm — which in a demo lands on the first
+question anyone asks.
 
 ## Boundaries
 
 - Azure, LanceDB, Docling and Tavily SDK types stop in `backend/app/providers/`.
 - Gate routing and escalation triggers are pure functions over scores and counters. The gate's
   ambiguous-band grader is the single exception, and it returns a relevance score, not a route.
-- `routes.py` owns HTTP, `service.py` owns orchestration, `repository.py` owns SQLite.
+- `api.py` owns HTTP and SSE framing, `db.py` owns SQLite, and the pipeline owns orchestration.
+  There is no separate service layer: `build_pipeline()` already is one, and a module that only
+  forwards calls to it would be a layer with nothing in it.
 - Settings are read only through `backend/app/config.py` and `frontend/src/lib/config.ts`.
 
-## Data model — (not built)
+## Data model
 
-No SQLite database exists yet. Ingestion writes JSONL only.
+`data/app.db`, stdlib `sqlite3`, no ORM. `manuals`, `sessions` and `messages` are built;
+`escalations` is **(not built)**.
 
 ```
 manuals      id, title, filename, page_count, page_offset, ingested_at
 
-sessions     id, manual_id, title, unresolved_streak, created_at, updated_at
+sessions     id, manual_id, title, created_at, updated_at
 
 messages     id, session_id, role, content, source, format,
              citations_json, created_at
@@ -154,6 +182,12 @@ escalations  id, session_id, reference, issue_summary, steps_tried_json,
 ```
 
 `manual_id` sits on the session, not the message — a conversation is locked to one manual (D11).
+
+`sessions` carries no `unresolved_streak` column yet; it arrives with `escalate` (D14).
+
+**The database is derived state and may be deleted.** The `manuals` row is written by `index.py`,
+which also embeds — so recovering a deleted `app.db` would otherwise cost a paid embedding run.
+`index.py --register-only` rewrites the row from the JSONL and the PDF in seconds instead.
 
 `page_offset` is detected per manual at ingest. In the BJ30 manual the printed page number is 5 lower
 than the PDF index — the answer cites the printed number, the viewer navigates by the PDF index.
