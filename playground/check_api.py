@@ -90,7 +90,10 @@ def main() -> None:
     for message in stored["messages"]:
         note = f" [{message['source']}]" if message["source"] else ""
         cites = "".join(
-            f" p{c.get('page_printed') or c.get('page_pdf')}" for c in message["citations"]
+            f" {c['url'].split('/')[2]}"
+            if c["type"] == "web"
+            else f" p{c.get('page_printed') or c.get('page_pdf')}"
+            for c in message["citations"]
         )
         print(f"  {message['role']:9}{note}{cites}  {message['content'][:60]!r}")
 

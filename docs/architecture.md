@@ -6,10 +6,10 @@ If a component named here does not exist yet, it is marked **(not built)**.
 Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
-indexing. Of the online half, `retrieve`, `rerank`, `gate` and `answer` are built, along with the SSE
-transport and the SQLite session store; `playground/check_api.py` drives them end to end.
-`resolve_query`, `web_search`, `escalate`, the `escalations` table and the UI are not built. Each is
-marked **(not built)** below.
+indexing. Of the online half, `retrieve`, `rerank`, `gate`, `web_search` and `answer` are built, along
+with the SSE transport and the SQLite session store; `playground/check_api.py` drives them end to end.
+`resolve_query`, `escalate`, the `escalations` table and the UI are not built. Each is marked
+**(not built)** below.
 
 ## Two halves
 
@@ -39,7 +39,7 @@ flowchart TB
         resolve --> retrieve["2 retrieve"]
         retrieve --> rerank["3 rerank"]
         rerank --> gate["4 gate"]
-        gate -->|weak, in scope| web["5 web_search<br/>(not built)"]
+        gate -->|weak, in scope| web["5 web_search"]
         gate -->|grounded| answer["6 answer"]
         web --> answer
         gate -->|safety gap / exhausted| esc["7 escalate<br/>(not built)"]
@@ -77,20 +77,35 @@ Fusion scores rank position rather than relevance, and measurably cannot separat
 from a request for a poem (D3). The assistant does not dead-end: a weak manual result downgrades the
 *source* of the answer, it does not refuse the question.
 
-| Condition | Route | Answer source |
-|---|---|---|
-| top score above HIGH | answer from manual | `manual` |
-| top score in partial band | answer from manual, supplement the gaps | `manual+general` |
-| below LOW, safety-critical topic | escalate — never improvise here | — |
-| below LOW, still about the product | web search + general expertise | `general` |
-| below LOW, not about the product | decline | — |
-| ambiguous band | one LLM grader call, then as above | — |
+Above `GATE_HIGH` the manual answers and **no grader runs** — no call, and no step event. At or below
+it the grader runs once and reports three observations; `decide()` turns those into a route:
 
-This is the Corrective-RAG pattern. The routing rules are pure functions over scores; the only model
-call is the grader in the ambiguous band, and it returns a score, not a destination.
+| Grader says | Score | Route | Answer source |
+|---|---|---|---|
+| — (not called) | above HIGH | answer from manual | `manual` |
+| not about the domain | any | decline | — |
+| passages answer it | above LOW | answer from manual | `manual` |
+| passages answer it | at or below LOW | answer from manual, supplement the gaps | `manual+general` |
+| passages do not, safety topic | any | escalate — never improvise here | — |
+| passages do not | any | web search + general expertise | `general` |
 
-**5 · web_search — (not built)** — Conditional. Runs only when the gate routes here. Tavily, scoped by
-the `DOMAIN_DESCRIPTION` config value. Results carry no page citations.
+`GATE_LOW` does **not** decide whether the grader is called — only `GATE_HIGH` does. `GATE_LOW`
+separates a confident manual answer from one that needs supplementing, once the grader has said the
+passages answer the question.
+
+This is the Corrective-RAG pattern. The routing rules are a pure function over a score and three
+booleans; the grader is the only model call, and it reports observations, not a destination.
+
+**5 · web_search** — Conditional, and only on the `general` route: `manual+general` keeps to the
+manual plus general guidance, so only a total miss earns a network call (brief items 15 and 16). The
+query is the manual's stored title plus the question. Domain restriction, when configured, is passed
+to Tavily as the `include_domains` **parameter** — never written into the query as a `site:` operator,
+which Tavily treats as ordinary words. `search_depth` is `basic`: measured here, `advanced` doubled
+the content but also the latency, for two credits instead of one.
+
+A failure — missing key, dead network, zero results — leaves `ctx.web` empty and the answer falls
+through to general knowledge. D14 wants *manual weak and web weak* to escalate; until `escalate`
+exists this degrades rather than dead-ends.
 
 **6 · answer** — One structured, streamed call returning:
 

@@ -719,3 +719,109 @@ orchestration; a service module would forward calls and hold nothing. It also li
 - [x] Retrieval unchanged — Recall@1 87%, MRR 0.919.
 - [ ] `resolve_query`, `web_search`, `escalate`.
 - [ ] Frontend.
+
+---
+
+## Slice 8 — web search for the `general` route
+
+### Outcome
+
+`web_search` runs on questions the manual does not cover, and the `web` citation type emits for the
+first time. Asked about warranty terms, the assistant now returns 7 years / unlimited km with a link
+to the source, rather than explaining that it cannot know.
+
+### Why
+
+The gate has routed to `general` since Slice 6, but the answer step had only the model's own
+knowledge behind it. Brief item 16 is explicit that a question the manual omits — a recall, a service
+centre, current pricing — must **still propose a solution**. D13 places web between general guidance
+and a human handoff. Without it the honest answer was a useless one.
+
+### Measured before building, and it changed two decisions
+
+**`search_depth` stays `basic`.** The first probe showed ~150-character snippets and suggested
+`advanced` was needed. Comparing them directly: advanced roughly doubled the content (3,742 → 6,501
+chars) but also the latency (2.10 s → 4.77 s), for two API credits instead of one. The short snippets
+in the first probe were a property of the *results* — Facebook and Instagram posts — not of the depth.
+On real questions `basic` returns 1,100–1,400 characters per useful result.
+
+**`WEB_DOMAINS` defaults to empty.** A restriction matching nothing returns an empty list, silently
+and identically to a domain that does not exist:
+
+| `include_domains` | Results |
+|---|---:|
+| `["baicinternational.com"]` | 0 |
+| `["baicglobal.com"]` | 3 |
+| `["example-does-not-exist-xyz.com"]` | 0 |
+
+A typo would therefore disable web search permanently and invisibly — which is close to what happened
+in the prior build, where every automotive question was restricted to `ruh.ac.lk`. The provider logs a
+warning when domains are configured and nothing comes back.
+
+### What the prior repos got wrong
+
+| Prior mistake | Here |
+|---|---|
+| Domain allowlist hardcoded in a `.py` file | `WEB_DOMAINS` in `.env`, empty by default |
+| `site:` pasted into the query text | passed as the `include_domains` parameter |
+| Model name sliced out of a filename, breaking on `"x55"` | query built from the manual's stored title |
+| A fabricated confidence number on results | none invented |
+
+### Titles became real data
+
+The query is the manual's stored title plus the question, so the auto-generated
+`Baic Bj30 E30 Owner Manual En` would have ridden into every search as dead tokens. PDF metadata was
+checked first and is useless here — the two manuals report `'6.24画册'` and `'前言'`. So `index.py`
+gained `--title`, and the titles are now `BAIC BJ30 / E30` and `BAIC X55 II`. They stay database rows,
+never product names in code (rule 3).
+
+### Commands
+
+```bash
+uv add --project backend tavily-python
+uv run --project backend --locked --no-sync python scripts/index.py \
+    data/chunks/<file>.jsonl --register-only --title "BAIC BJ30 / E30"
+uv run --project backend --locked --no-sync python playground/check_pipeline.py
+```
+
+### Observed
+
+| Question | Score | Route | Web | Cited |
+|---|---:|---|---:|---|
+| Bluetooth pairing (X55) | −5.52 | `general` | 4 | 1–3 web |
+| Is there a recall on this vehicle? | −6.74 | `general` | 4 | 0–2 web |
+| What does the warranty cover? | −5.44 | `general` | 4 | baicnz.com |
+| Weather forecast | −10.12 | `decline` | — | — |
+
+The four manual-answered questions were unaffected: no `web` step event, page citations unchanged.
+Retrieval unchanged — Recall@1 87%, MRR 0.919.
+
+### Prompt leakage, four attempts and an honest residual
+
+The model kept narrating its own context: *"None of the listed results mention…"*, *"the web results
+you provided"*. Three prompt revisions each reduced it and none removed it, and one made things worse
+— an illustrative sentence in the prompt (*"I can't confirm whether this vehicle has an open recall;
+your dealer can check by VIN"*) was reproduced verbatim as the opening line of an unrelated warranty
+answer. Few-shot contamination from a single quoted example.
+
+What helped most was structural, not persuasive: **the retrieved context moved from the user message
+into the system message**. Sent as part of the user turn it genuinely *was* "information you
+provided", and the model said so. Blocks are now headed `What the manual says:` and `What you know:`
+rather than `Passages:` and `Results:`.
+
+**This is reduced, not solved.** Across two runs afterwards: one run clean, one containing *"the
+manuals content you're using here doesn't include recall data"*. It recurs specifically where the
+model must explain why it cannot answer, which is inherently self-referential. Recorded rather than
+claimed fixed. The parts that must never fail — the `source` label, the prepended disclaimer, citation
+construction — are Python-owned and were correct in every run.
+
+### Checkpoint
+
+- [x] `web_search` runs on `general` only, never on a manual-answered question.
+- [x] Web citations carry real URLs; page and web citations never mix in one answer.
+- [x] A Tavily failure degrades to general knowledge instead of raising.
+- [x] `include_domains` passed as a parameter, never as query text.
+- [x] Manual titles set as data.
+- [x] Retrieval unchanged — Recall@1 87%, MRR 0.919.
+- [ ] Prompt leakage fully eliminated — reduced only.
+- [ ] `escalate`, so the safety route stops dead-ending.

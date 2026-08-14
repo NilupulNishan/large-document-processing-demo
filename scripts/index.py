@@ -34,7 +34,7 @@ def recover_offset(records: list[dict]) -> int | None:
     return None
 
 
-def register_manual(manual_id: str, records: list[dict]) -> None:
+def register_manual(manual_id: str, records: list[dict], title: str | None = None) -> None:
     """Metadata the API needs — title, page count, offset — which ingest does not persist."""
     import pypdfium2
 
@@ -45,11 +45,13 @@ def register_manual(manual_id: str, records: list[dict]) -> None:
     with pypdfium2.PdfDocument(pdf_path) as pdf:
         page_count = len(pdf)
 
-    # A prettified stem, stored in the database so a better title is data entry, not a code
-    # change with a product name in it (rule 3).
-    title = manual_id.replace("-", " ").title()
-    upsert_manual(manual_id, title, pdf_path.name, page_count, recover_offset(records))
-    print(f"  registered '{title}' — {page_count} pages, offset {recover_offset(records)}")
+    # The title shows in the picker and rides into every web search query, so it is worth
+    # setting properly. It stays a database row, never a product name in code (rule 3).
+    # PDF metadata is no help here — these two report '6.24画册' and '前言'.
+    title = title or manual_id.replace("-", " ").title()
+    offset = recover_offset(records)
+    upsert_manual(manual_id, title, pdf_path.name, page_count, offset)
+    print(f"  registered '{title}' — {page_count} pages, offset {offset}")
 
 
 def main() -> None:
@@ -61,6 +63,9 @@ def main() -> None:
         help="Rewrite the manuals row without re-embedding. data/app.db is derived state and "
         "may be deleted; recovering it should not cost another embedding run.",
     )
+    argument_parser.add_argument(
+        "--title", help="Display name for the picker and web search queries."
+    )
     arguments = argument_parser.parse_args()
 
     jsonl_path = arguments.jsonl if arguments.jsonl.is_absolute() else REPO_ROOT / arguments.jsonl
@@ -70,7 +75,7 @@ def main() -> None:
     records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()]
 
     if arguments.register_only:
-        register_manual(records[0]["manual"], records)
+        register_manual(records[0]["manual"], records, arguments.title)
         return
 
     texts = [embeddable(record) for record in records]
@@ -97,7 +102,7 @@ def main() -> None:
     ]
 
     print(f"  table now holds {write_chunks(rows)} rows")
-    register_manual(records[0]["manual"], records)
+    register_manual(records[0]["manual"], records, arguments.title)
 
 
 if __name__ == "__main__":

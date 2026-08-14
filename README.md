@@ -28,8 +28,8 @@ backend/          FastAPI app, pipeline steps, providers
   app/
     api.py        HTTP routes and SSE framing
     db.py         SQLite — manuals, sessions, messages
-    pipeline/     resolve_query* → retrieve → rerank → gate → web_search* → answer → escalate*
-    providers/    Azure, LanceDB, Docling, Tavily* adapters — SDK types stop here
+    pipeline/     resolve_query* → retrieve → rerank → gate → web_search → answer → escalate*
+    providers/    Azure, LanceDB, Docling, Tavily adapters — SDK types stop here
 frontend/*        Next.js UI: manual picker, chat, PDF pane, session history, operator inbox
 eval/             questions.jsonl + run.py — the test suite for this project
 playground/       Experiment scripts. Not application code.
@@ -55,12 +55,16 @@ uv run --project backend --locked --no-sync python scripts/ingest.py data/manual
 uv run --project backend --locked --no-sync python scripts/index.py data/chunks/<file>.jsonl
 ```
 
-`data/` is derived state and gitignored. If `data/app.db` is lost, recover the manual registry
-without paying for another embedding run:
+The title shows in the picker and rides into every web search query, so set it properly. PDF metadata
+is no help — these manuals report `'6.24画册'` and `'前言'`.
 
 ```bash
-uv run --project backend --locked --no-sync python scripts/index.py data/chunks/<file>.jsonl --register-only
+uv run --project backend --locked --no-sync python scripts/index.py \
+    data/chunks/<file>.jsonl --register-only --title "BAIC BJ30 / E30"
 ```
+
+`data/` is derived state and gitignored. The same `--register-only` flag recovers the manual registry
+if `data/app.db` is lost, without paying for another embedding run.
 
 Then start the API:
 
@@ -96,13 +100,18 @@ Questions that exercise each route:
 
 | Ask | Expect |
 |---|---|
-| "How do I change a flat tyre?" | `source=manual`, a page citation, no `gate` event |
+| "How do I change a flat tyre?" | `source=manual`, page citations, no `gate` event |
 | "What engine oil does it take?" | `source=manual`, preceded by a `gate` event |
-| "Where is my nearest service centre?" | `source=general`, no citations, disclaimer first |
-| "Write me a poem about the sea" | `decline`, one short refusal |
+| "What does the warranty cover?" | `source=general`, a `web` event, `[web]` citations |
+| "Write me a poem about the sea" | `decline`, one short refusal, no model call |
 
-A `gate` event appears only when the top score fell below `GATE_HIGH` and a grader call actually ran.
-Seeing one on a question that answered confidently would be a bug.
+Two step events are worth watching. A `gate` event appears only when the top score fell below
+`GATE_HIGH` and a grader call actually ran — seeing one on a question that answered confidently is a
+bug. A `web` event appears only on the `general` route; on a manual-answered question it means the
+gate misrouted.
+
+Safety-critical questions the manual does not cover route to `escalate`, which is **not built** — the
+stream returns an `error` frame rather than an answer. That is deliberate, not a crash.
 
 The scripted equivalent, with per-frame timing:
 
@@ -121,8 +130,8 @@ uv run --project backend --locked --no-sync python eval/run.py
 
 ## Status
 
-Built: ingestion, embedding and indexing; the `retrieve → rerank → gate → answer` pipeline; SSE
-transport; session persistence.
+Built: ingestion, embedding and indexing; the `retrieve → rerank → gate → web_search → answer`
+pipeline; SSE transport; session persistence.
 
-Not built: `resolve_query`, `web_search`, `escalate` and the operator inbox, and the frontend.
+Not built: `resolve_query`, `escalate` and the operator inbox, and the frontend.
 `docs/architecture.md` marks each of these `(not built)` and is kept in step with the code.

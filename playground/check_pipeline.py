@@ -21,7 +21,8 @@ QUESTIONS = [
     (BJ30, "The airbag warning light is on. What does that mean?"),
     (X55, "I accidentally put diesel in. What now?"),
     (X55, "How do I pair my phone with bluetooth?"),
-    (BJ30, "Where is my nearest BAIC service centre?"),
+    (BJ30, "Is there a recall on this vehicle?"),
+    (BJ30, "What does the warranty cover and for how long?"),
     (BJ30, "What is the weather forecast for tomorrow?"),
 ]
 
@@ -44,9 +45,12 @@ def main() -> None:
         for line in ctx.answer.answer.splitlines():
             print(f"  {line}")
         for citation in ctx.answer.citations:
+            if citation.type == "web":
+                print(f"    [web]  {citation.url}")
+                continue
             page = citation.page_printed or citation.page_pdf
             kind = "printed" if citation.page_printed else "pdf"
-            print(f"    [{citation.type}] p{page} ({kind})  {(citation.section or '')[:50]}")
+            print(f"    [page] p{page} ({kind})  {(citation.section or '')[:50]}")
 
 
 if __name__ == "__main__":

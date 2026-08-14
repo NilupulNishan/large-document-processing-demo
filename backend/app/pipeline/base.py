@@ -43,6 +43,7 @@ class PipelineContext(BaseModel):
     candidates: list[dict] = []
     passages: list[dict] = []
     top_score: float = 0.0
+    web: list[dict] = []
 
     route: Route | None = None
     answer: Answer | None = None

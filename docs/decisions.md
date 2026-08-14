@@ -306,6 +306,19 @@ A `page` citation is never emitted for content the manual did not supply, and th
 responds to a `web` citation. The two must be visually distinct — that difference is the guard, not
 styling. If the pills look alike we have rebuilt the exact failure this decision exists to prevent.
 
+**How the web query is built, recorded because two prior builds got it wrong.** Both earlier repos
+failed at web search in the calling code, not in Tavily. One hardcoded a university domain allowlist
+in a `.py` file and pasted `site:` operators into the query text — Tavily takes an `include_domains`
+parameter and treats `site:` as ordinary words, so the operators became noise. The other sliced a
+model name out of a filename, broke on `"x55"`, and searched for a car that does not exist. So here:
+the query is the manual's **stored title** plus the question, domain restriction lives in `.env` as
+`WEB_DOMAINS` and is passed as a parameter, and no confidence number is invented.
+
+`WEB_DOMAINS` is empty by default, and deliberately. Measured: a restriction matching nothing returns
+zero results silently, identically to a domain that does not exist — so a typo would disable web
+search permanently and invisibly. The provider logs a warning when domains are set and nothing comes
+back.
+
 **Safety carve-out, defined in configuration rather than code.** Topics where a wrong answer can
 injure someone are answered from the manual or escalated, never improvised from general knowledge.
 Which topics those are is corpus knowledge, so it lives in `backend/.env` as `SAFETY_TOPICS`,

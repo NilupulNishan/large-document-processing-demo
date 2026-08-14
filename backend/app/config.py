@@ -57,3 +57,8 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 DOMAIN_DESCRIPTION = os.getenv("DOMAIN_DESCRIPTION", "")
 # Corpus knowledge, not code. See D13 and backend/.env.example.
 SAFETY_TOPICS = tuple(t.strip() for t in os.getenv("SAFETY_TOPICS", "").split(",") if t.strip())
+# Empty means the open web. Goes to Tavily as include_domains — never into the query text
+# as a site: operator, which is how the previous build turned it into noise tokens.
+WEB_DOMAINS = tuple(d.strip() for d in os.getenv("WEB_DOMAINS", "").split(",") if d.strip())
+
+WEB_RESULTS = 4
