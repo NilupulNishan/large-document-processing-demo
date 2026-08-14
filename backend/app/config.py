@@ -20,9 +20,9 @@ MAX_EMBEDDING_TOKENS = 8191
 EMBEDDING_DIMENSIONS = 3072
 EMBED_BATCH_SIZE = 64
 
-# Retrieval. D3: fuse BM25 and dense with RRF at k=60, take 100 before reranking.
+# Retrieval. D3: fuse BM25 and dense with RRF at k=60. How many come back is
+# RERANK_CANDIDATES below — one stage, not the two D3 originally described.
 RRF_K = 60
-RETRIEVE_LIMIT = 100
 
 # Reranking. The gate reads these scores and nothing else — RRF scores rank position,
 # not relevance, and cannot separate a grounded question from a poem. See D3.

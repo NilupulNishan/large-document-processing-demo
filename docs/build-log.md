@@ -523,3 +523,105 @@ have been confidently declined despite being answerable from the manual.
 Bands moved to `HIGH -4.1`, `LOW -7.5`. No unanswerable question is now routed confidently to the
 manual; all six are `grader` or `LOW`. Widening costs a grader call, narrowing misroutes, so the
 asymmetry decides the direction.
+
+---
+
+## Slice 6 — the pipeline: retrieve, rerank, gate, answer
+
+### Outcome
+
+`backend/app/pipeline/` — four steps assembled by `build_pipeline()`, answering real questions end to
+end with page citations. Four of the five routes work; `escalate` returns no answer yet, and
+`resolve_query` and `web_search` are not built.
+
+### Why
+
+Everything before this was measured in isolation: retrieval by Recall@1, reranking by MRR, the gate by
+where scores fell against two thresholds. None of it had produced an answer a person could read. This
+is the slice where the parts become a product.
+
+### Shape
+
+Plain classes with one `run(ctx)` method, assembled by a `build_pipeline()` function, following the
+reference project. `PipelineContext` carries state forward; each step adds to it and returns it.
+
+Two rules are enforced in Python rather than asked of the model:
+
+- **`source` is set from the route**, never by the model. A wrong source label is the worst output
+  this system can produce (D13).
+- **The model cites by passage index; Python maps those indices back to real pages** and drops
+  anything out of range. A hallucinated page number is therefore not expressible.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+uv run --project backend --locked --no-sync python playground/check_pipeline.py
+```
+
+### Observed
+
+Seven questions, exit 0. Four routed `manual` with page citations, two `general` with none, one
+`decline`:
+
+| Question | Score | Route | Cited |
+|---|---:|---|---|
+| Bluetooth pairing (BJ30) | +9.29 | `manual` | p89 |
+| Engine oil type and capacity | −7.21 | `manual` via grader | p276 |
+| Airbag warning light | +4.68 | `manual` | p120, p74 |
+| Diesel misfuelling (X55) | −5.41 | `manual` via grader | p174 |
+| Bluetooth pairing (X55) | −5.52 | `general` | — |
+| Nearest service centre | −4.56 | `general` | — |
+| Weather forecast | −10.12 | `decline` | — |
+
+`bj30-02` is the case Slice 5 widened the bands for: at −7.21 it sits below `GATE_HIGH`, the grader
+confirms the manual covers it, and it routes to `manual` rather than being declined. The mechanism
+works on the question it was designed for.
+
+The X55 diesel answer cites `p174 (pdf)` rather than a printed number — X55 has no detected page
+offset, so `pages_printed` is empty and the citation falls back to the PDF index (D6). Correct, and
+the first time that path has run outside a test.
+
+### Two prompt defects the run exposed
+
+**The model narrated its own instructions.** Asked to "open with the fact that this is not from their
+manual", it wrote *"This guidance is not from your vehicle's owner manual (since you said it doesn't
+cover it)"*. The grounded prompt produced *"Part not fully settled by the manual: …"*. Both read as a
+system prompt leaking through. Fixed by telling it to write as the expert and never mention passages,
+numbering or the instructions.
+
+**Then the fix over-corrected.** "Open with a single sentence saying this is not covered" was read as
+"the answer is a single sentence", and both `general` answers collapsed to just the disclaimer with
+the actual guidance gone. Caught only because the run was re-read rather than assumed.
+
+**The disclaimer moved into Python.** Rewritten again, the model supplied the disclaimer on one run
+and silently dropped it on the next — the X55 bluetooth answer opened straight into general guidance
+with nothing marking it. That is precisely the failure rule 2 names as the most damaging, and a prompt
+is the wrong instrument for a guarantee. `_NOT_IN_MANUAL` is now prepended in `AnswerStep` whenever
+the route is `general`, and the prompt is told not to write one. The UI badge is not sufficient on its
+own: it does not survive copy and paste.
+
+### Corrections to the docs
+
+`docs/architecture.md` claimed retrieval returns "top-100 candidates" and reranking scores "the
+top-30 … roughly 300 ms". The measured build is one stage of 12 → 12 → 6 at ~1,249 ms. Both corrected,
+along with the status header and the `(not built)` markers.
+
+The evaluation section listed `partial` as an `expected_route` value. No such route exists — it is
+`manual+general` — and no row uses it. The 44 rows cover only `manual` 38, `general` 4, `decline` 2,
+so **`manual+general` and `escalate` are entirely unmeasured**. Recorded rather than quietly fixed,
+because closing that gap needs `web_search` and `escalate` to exist first.
+
+`RETRIEVE_LIMIT = 100` was dead config — every caller passes `RERANK_CANDIDATES` explicitly. Removed,
+and `search()` now requires `limit` rather than defaulting it.
+
+### Checkpoint
+
+- [x] Four steps, assembled by `build_pipeline()`.
+- [x] `source` and citations built in Python, not accepted from the model.
+- [x] Grounded, grader-recovered, ungrounded and declined questions all behave.
+- [x] Retrieval unchanged by the refactor — Recall@1 87%, MRR 0.919.
+- [x] Every `general` answer carries its disclaimer deterministically.
+- [ ] `resolve_query`, `web_search`, `escalate`.
+- [ ] Streaming, transport, persistence.

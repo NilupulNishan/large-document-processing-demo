@@ -8,7 +8,6 @@ from app.config import (
     CHUNKS_TABLE,
     EMBEDDING_DIMENSIONS,
     LANCEDB_DIR,
-    RETRIEVE_LIMIT,
     RRF_K,
 )
 
@@ -45,7 +44,7 @@ def write_chunks(rows: list[dict]) -> int:
 
 
 def search(
-    manual: str, query: str, query_vector: list[float], limit: int = RETRIEVE_LIMIT
+    manual: str, query: str, query_vector: list[float], limit: int
 ) -> list[dict]:
     """Dense and full-text in parallel, fused with RRF (D3), scoped to one manual (D11)."""
     table = lancedb.connect(LANCEDB_DIR).open_table(CHUNKS_TABLE)

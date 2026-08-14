@@ -2,9 +2,12 @@
 
 from functools import cache
 
+from pydantic import BaseModel
+
 from app.config import (
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_API_VERSION,
+    AZURE_OPENAI_CHAT_DEPLOYMENT,
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
     AZURE_OPENAI_ENDPOINT,
     EMBED_BATCH_SIZE,
@@ -52,3 +55,22 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 def embed_query(text: str) -> list[float]:
     return embed_texts([text])[0]
+
+
+def complete[T: BaseModel](system: str, user: str, schema: type[T]) -> T:
+    """Structured completion. Raises if the model returns nothing parseable."""
+    if not AZURE_OPENAI_CHAT_DEPLOYMENT:
+        raise RuntimeError("Missing in backend/.env: AZURE_OPENAI_CHAT_DEPLOYMENT")
+
+    response = _client().chat.completions.parse(
+        model=AZURE_OPENAI_CHAT_DEPLOYMENT,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        response_format=schema,
+    )
+    parsed = response.choices[0].message.parsed
+    if parsed is None:
+        raise RuntimeError(f"{AZURE_OPENAI_CHAT_DEPLOYMENT} returned no parseable output")
+    return parsed

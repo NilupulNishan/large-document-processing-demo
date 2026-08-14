@@ -5,9 +5,10 @@ If a component named here does not exist yet, it is marked **(not built)**.
 
 Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
-Status: the offline half is built through chunking — parse, normalise, merge, page-offset detection.
-Embedding and indexing are in progress. Nothing in the online half exists yet; every part of it is
-marked **(not built)** below.
+Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
+indexing. Of the online half, `retrieve`, `rerank`, `gate` and `answer` are built and run end to end
+from `playground/check_pipeline.py`. `resolve_query`, `web_search` and `escalate` are not, nor is the
+transport, the database or the UI. Each is marked **(not built)** below.
 
 ## Two halves
 
@@ -32,15 +33,15 @@ flowchart TB
         jsonl --> sqlite[(SQLite — not built)]
     end
 
-    subgraph online["Online — FastAPI, SSE — (not built)"]
-        q[User question] --> resolve["1 resolve_query"]
+    subgraph online["Online — pipeline built; FastAPI + SSE (not built)"]
+        q[User question] --> resolve["1 resolve_query<br/>(not built)"]
         resolve --> retrieve["2 retrieve"]
         retrieve --> rerank["3 rerank"]
         rerank --> gate["4 gate"]
-        gate -->|weak, in scope| web["5 web_search"]
+        gate -->|weak, in scope| web["5 web_search<br/>(not built)"]
         gate -->|grounded| answer["6 answer"]
         web --> answer
-        gate -->|safety gap / exhausted| esc["7 escalate"]
+        gate -->|safety gap / exhausted| esc["7 escalate<br/>(not built)"]
         answer --> esc
     end
 
@@ -50,23 +51,25 @@ flowchart TB
     esc -.-> inbox[Operator inbox]
 ```
 
-## Pipeline steps — (not built)
+## Pipeline steps
 
 Each step is a class in `backend/app/pipeline/` with one `run(ctx)` method. `build_pipeline()`
-assembles them in order. Adding a capability means adding a step. None of the seven exist yet; the
-directory itself is not created.
+assembles them in order. Adding a capability means adding a step. Steps 2, 3, 4 and 6 are built;
+`build_pipeline()` currently returns those four.
 
-**1 · resolve_query** — If the turn is a follow-up, rewrite it into a standalone question using the
+**1 · resolve_query — (not built)** — If the turn is a follow-up, rewrite it into a standalone question using the
 last ~6 user turns, then concatenate the rewrite with the raw question. If there is no history, pass
 through untouched. Also classifies whether the user is reporting that a previous suggestion failed,
 which drives `unresolved_streak` (D14). This is what makes a reopened conversation continue correctly.
 
 **2 · retrieve** — Hybrid search in LanceDB scoped to the session's manual: BM25 full-text and dense
-vector in parallel, fused with Reciprocal Rank Fusion at k=60. Returns top-100 candidates carrying
-page numbers and headings.
+vector in parallel, fused with Reciprocal Rank Fusion at k=60. Returns 12 candidates carrying page
+numbers and headings.
 
-**3 · rerank** — Local cross-encoder (ONNX, CPU) scores the top-30 candidates and returns the best 6.
-Roughly 300 ms — small against the answer call, and invisible to the user because the answer streams.
+**3 · rerank** — Local cross-encoder (ONNX, CPU) scores those 12 candidates and returns the best 6.
+One stage of 12, not D3's 100 → 30: Recall@10 over the fused candidates is 100%, so reranking a
+longer tail costs latency and buys nothing measurable. Measured at ~1,249 ms on this laptop, not the
+~300 ms D3 assumed — the largest single cost before the first token. See build-log Slice 5.
 
 **4 · gate** — Reads **cross-encoder** scores from step 3, never the RRF fusion scores from step 2.
 Fusion scores rank position rather than relevance, and measurably cannot separate a grounded question
@@ -85,10 +88,11 @@ from a request for a poem (D3). The assistant does not dead-end: a weak manual r
 This is the Corrective-RAG pattern. The routing rules are pure functions over scores; the only model
 call is the grader in the ambiguous band, and it returns a score, not a destination.
 
-**5 · web_search** — Conditional. Runs only when the gate routes here. Tavily, scoped by the
-`DOMAIN_DESCRIPTION` config value. Results carry no page citations.
+**5 · web_search — (not built)** — Conditional. Runs only when the gate routes here. Tavily, scoped by
+the `DOMAIN_DESCRIPTION` config value. Results carry no page citations.
 
-**6 · answer** — One structured, streamed call returning:
+**6 · answer** — One structured call returning the fields below. Streaming is **(not built)**; today
+the call blocks and the answer arrives whole.
 
 ```
 format     direct | steps | troubleshoot | explanation
@@ -105,8 +109,9 @@ citation only for content web search supplied. The PDF pane responds to `page` c
 about a real vehicle is the most damaging failure this system can produce, and identical-looking
 pills are how that happens (D13).
 
-**7 · escalate** — Deterministic. Triggers and streak mechanics in D14. Writes an `escalations` row
-and surfaces a reference number to the user.
+**7 · escalate — (not built)** — Deterministic. Triggers and streak mechanics in D14. Writes an
+`escalations` row and surfaces a reference number to the user. The gate already emits the `escalate`
+route; `AnswerStep` currently returns no answer for it.
 
 ## Transport — (not built)
 
@@ -171,12 +176,18 @@ Getting this backwards shows the wrong page to the user.
  "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` is one of `manual`, `partial`, `general`, `decline`, `escalate`. `kind` is
-`procedure`, `spec`, `symptom`, `safety`, `absent` or `offtopic`, so weakness can be located rather
-than just observed. Pages are labelled from the source text, never from retrieval output.
+`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 44 rows cover three of the
+five: `manual` 38, `general` 4, `decline` 2. **`manual+general` and `escalate` have no labelled rows,
+so those two paths are unmeasured** — worth closing once `web_search` and `escalate` exist. `kind` is
+`procedure` 22, `spec` 6, `symptom` 5, `safety` 5, `absent` 4, `offtopic` 2, so weakness can be
+located rather than just observed. Pages are labelled from the source text, never from retrieval
+output.
 
-`eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind. Routing accuracy is
-**(not built)** — it needs the gate. Answer prose is never scored.
+`eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind, scoring fusion order
+against reranked order over the same candidates. It also prints each question's top reranker score
+against `GATE_HIGH` / `GATE_LOW`, which is how the bands were calibrated. End-to-end routing accuracy
+is **(not built)**: the harness stops at the score and never calls the grader or the answer step.
+Answer prose is never scored.
 
 ## Deliberate omissions
 
