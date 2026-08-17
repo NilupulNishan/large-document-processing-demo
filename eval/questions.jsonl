@@ -42,3 +42,11 @@
 {"id": "gen-04", "question": "How much does this car cost new?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "general", "kind": "absent"}
 {"id": "dec-01", "question": "What is the weather forecast for tomorrow?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "decline", "kind": "offtopic"}
 {"id": "dec-02", "question": "Write me a poem about the sea.", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "decline", "kind": "offtopic"}
+{"id": "esc-01", "question": "What torque do I use on the brake caliper bolts?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-02", "question": "Can I tow a 2,500 kg caravan with this?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-03", "question": "What is the maximum tongue weight on the tow bar?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-04", "question": "Where are the reinforced jacking points for a two-post lift?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-05", "question": "What is the isolation resistance spec for the high-voltage battery pack?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-06", "question": "What is the wheel nut torque specification?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-07", "question": "Can I fit a towbar myself and what wiring does it need?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "bj30-23", "question": "What is the maximum trailer weight I can tow?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [272, 273, 274, 275], "expected_route": "manual", "kind": "spec"}
