@@ -37,7 +37,8 @@ def main() -> None:
         top = max(scores)
 
         verdict = grade(row["question"], ordered[:RERANK_KEEP])
-        forced = decide(min(top, GATE_HIGH), verdict)  # what routing gives if the grader always runs
+        # What routing would give if the grader always ran.
+        forced = decide(min(top, GATE_HIGH), verdict)
         actual = decide(top, verdict if top <= GATE_HIGH else None)
 
         band = "HIGH" if top > GATE_HIGH else "grade"

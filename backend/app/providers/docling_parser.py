@@ -25,6 +25,25 @@ def _build_converter():
     )
 
 
+def _markdown_tables():
+    """
+    Docling's default writes one sentence per cell, repeating the row label in every one:
+    `Total mass of quasi-trailer (T), BJ6470X52MHEV = 1.5.` Neither the reranker nor the
+    grader reads that as an answer. See build-log Slice 10.
+    """
+    from docling_core.transforms.chunker.hierarchical_chunker import (
+        ChunkingDocSerializer,
+        ChunkingSerializerProvider,
+    )
+    from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
+
+    class MarkdownTableProvider(ChunkingSerializerProvider):
+        def get_serializer(self, doc):
+            return ChunkingDocSerializer(doc=doc, table_serializer=MarkdownTableSerializer())
+
+    return MarkdownTableProvider()
+
+
 def _build_chunker():
     import tiktoken
     from docling.chunking import HybridChunker
@@ -36,6 +55,7 @@ def _build_chunker():
             max_tokens=MAX_EMBEDDING_TOKENS,
         ),
         merge_peers=True,
+        serializer_provider=_markdown_tables(),
     )
 
 
@@ -52,8 +72,22 @@ def _pages(meta) -> tuple[int, ...]:
     )
 
 
-def parse(pdf_path: Path) -> ParsedManual:
-    document = _build_converter().convert(pdf_path).document
+def parse(pdf_path: Path, cache: Path | None = None) -> ParsedManual:
+    """
+    Convert, then chunk. Given a cache path the converted document is reused: conversion runs
+    the layout models over every page and takes minutes, chunking takes seconds, and tuning
+    the chunker is the only reason to run this twice.
+    """
+    from docling_core.types.doc.document import DoclingDocument
+
+    if cache and cache.exists():
+        document = DoclingDocument.load_from_json(cache)
+    else:
+        document = _build_converter().convert(pdf_path).document
+        if cache:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            document.save_as_json(cache)
+
     chunks = tuple(
         Chunk(
             text=chunk.text,

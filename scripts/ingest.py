@@ -18,6 +18,7 @@ from app.ingestion.offset import detect_page_offset  # noqa: E402
 from app.providers.docling_parser import parse  # noqa: E402
 
 OUTPUT_DIR = REPO_ROOT / "data" / "chunks"
+PARSED_DIR = REPO_ROOT / "data" / "parsed"
 
 
 def heading_path(headings: tuple[str, ...]) -> str:
@@ -29,6 +30,9 @@ def main() -> None:
         description="Ingest one manual into normalised chunks."
     )
     argument_parser.add_argument("pdf", type=Path)
+    argument_parser.add_argument(
+        "--reparse", action="store_true", help="ignore the cached parse and run the models again"
+    )
     arguments = argument_parser.parse_args()
 
     pdf_path = arguments.pdf if arguments.pdf.is_absolute() else REPO_ROOT / arguments.pdf
@@ -39,9 +43,13 @@ def main() -> None:
     offset = detect_page_offset(pdf_path)
     print(f"printed-page offset: {offset if offset is not None else 'none detected'}")
 
-    print(f"parsing {pdf_path.name} ...")
+    cache = PARSED_DIR / f"{pdf_path.stem}.json"
+    if arguments.reparse:
+        cache.unlink(missing_ok=True)
+
+    print(f"parsing {pdf_path.name} ({'cached' if cache.exists() else 'running the models'}) ...")
     started = time.perf_counter()
-    manual = parse(pdf_path)
+    manual = parse(pdf_path, cache=cache)
     elapsed = time.perf_counter() - started
     print(
         f"  {manual.page_count} pages, {len(manual.chunks)} chunks "

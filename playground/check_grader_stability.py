@@ -1,0 +1,66 @@
+"""
+How often the grader gives the same verdict for the same input. It decides every route below
+GATE_HIGH, so any flipping here is a route flipping.
+
+    uv run --project backend python playground/check_grader_stability.py
+"""
+
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8")
+sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
+
+from app.config import GATE_HIGH, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
+from app.pipeline.gate import decide, grade  # noqa: E402
+from app.providers.azure_openai import embed_query  # noqa: E402
+from app.providers.lancedb_store import search  # noqa: E402
+from app.providers.reranker import score  # noqa: E402
+
+RUNS = 5
+FIELDS = ("passages_answer_the_question", "question_is_about_the_domain",
+          "question_touches_a_safety_topic")
+
+
+def main() -> None:
+    questions = (REPO_ROOT / "eval" / "questions.jsonl").read_text(encoding="utf-8")
+    rows = [json.loads(line) for line in questions.splitlines() if line]
+    # Only rows the grader actually decides: at or below the band, no shortcut.
+    graded = []
+    for row in rows:
+        hits = search(
+            row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
+        )
+        scores = score(row["question"], [h["text"] for h in hits])
+        ordered = [h for _, h in sorted(zip(scores, hits, strict=True), key=lambda p: -p[0])]
+        top = max(scores)
+        if top <= GATE_HIGH:
+            graded.append((row, ordered[:RERANK_KEEP], top))
+
+    print(f"{len(graded)} rows reach the grader; {RUNS} runs each\n")
+    print(f"{'id':10} {'routes seen':38} {'stable':7} {'expected'}")
+
+    flipping = 0
+    for row, passages, top in graded:
+        routes, flips = [], Counter()
+        for _ in range(RUNS):
+            verdict = grade(row["question"], passages)
+            routes.append(decide(top, verdict))
+            for field in FIELDS:
+                flips[field] += getattr(verdict, field)
+        seen = Counter(routes)
+        stable = len(seen) == 1
+        flipping += not stable
+        unstable = [f.split("_")[-1] for f in FIELDS if 0 < flips[f] < RUNS]
+        print(
+            f"{row['id']:10} {str(dict(seen)):38} {'yes' if stable else 'NO':7} "
+            f"{row['expected_route']:14} {'flips: ' + ','.join(unstable) if unstable else ''}"
+        )
+
+    print(f"\n{flipping}/{len(graded)} rows changed route across identical runs")
+
+
+if __name__ == "__main__":
+    main()

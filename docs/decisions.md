@@ -411,3 +411,45 @@ is `gpt-5.4-mini` at $3.00 per 500 questions, then `gpt-5.6-terra` at $9.50. Bot
 against the cost of a demo that does not land.
 
 Numbers and re-verification commands in `docs/pricing.md`.
+
+---
+
+## D16 — Long chunks are reranked by their best window, and tables are serialised as markdown
+
+**Decision.** The cross-encoder scores every window of an oversized chunk and keeps the highest.
+Docling's chunker serialises tables as markdown rather than as one sentence per cell.
+
+**Why the first.** `RERANK_MAX_TOKENS` is 512 because that is the model's window, not a tuning
+choice. Chunks are sized for the embedder's 8,191, so the two disagree by an order of magnitude and
+the reranker silently read the first 512 tokens of everything. Measured: 11% of BJ30's tokens and 22%
+of X55's were unreachable, and the chunk holding the towing capacity was read to 22% — the answer sat
+at character 5,196 with the cut at 2,082. The reranker was scoring that chunk on engine cylinder
+arrangement.
+
+Rejected: raising the limit, which the model does not support; and shrinking chunks to 512 tokens,
+which would triple the chunk count and split procedures across boundaries to fix a reranking problem.
+Windowing costs about 31% more reranking latency and touches only the 6–9% of chunks that overflow —
+a chunk that fits produces one window and scores exactly as before.
+
+**Why the second.** Docling's default `TripletTableSerializer` writes one sentence per cell and
+repeats the row label in each:
+
+```
+Total mass of quasi-trailer (T), Vehicle models = Total mass of quasi-trailer (T).
+Total mass of quasi-trailer (T), BJ6470X51MHEV = -.
+Total mass of quasi-trailer (T), BJ6470X52MHEV = 1.5.
+```
+
+The header row becomes a self-referential cell and empty cells become `= .`. Windowing put that chunk
+back in the top 5, and the grader then reported that it does not answer the question. It does; the
+answer is `1.5`. The representation defeats the reranker and the grader independently, which is why
+this is an ingestion fix and not a retrieval one.
+
+The triplet format is not arbitrary — every cell self-describes, so a table split across chunks stays
+readable. Markdown trades that for density, and the risk is a split that separates rows from their
+header. That is measured after ingest rather than assumed, in `playground/check_tables.py`.
+
+**Cost.** Re-ingest and re-embed. Embedding the whole corpus is roughly 190k tokens at $0.130/1M —
+about 2.5 cents. Conversion is the expensive half at ~10 minutes a manual, so `parse()` now caches
+the converted document under `data/parsed/` and chunking reruns in seconds. `--reparse` forces the
+models to run again.
