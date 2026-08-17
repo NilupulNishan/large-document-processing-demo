@@ -825,3 +825,107 @@ construction — are Python-owned and were correct in every run.
 - [x] Retrieval unchanged — Recall@1 87%, MRR 0.919.
 - [ ] Prompt leakage fully eliminated — reduced only.
 - [ ] `escalate`, so the safety route stops dead-ending.
+
+---
+
+## Slice 9 — the frontend: chat beside the cited page
+
+### Outcome
+
+A question typed in a browser streams its answer beside the manual page it came from. Citation pills
+move the PDF pane; web pills open a tab. Past conversations reopen with their citations intact. The
+whole system is now visible without a terminal.
+
+### Why
+
+Everything worked and nothing could be seen. The deliverable is a client proposal and three previous
+attempts failed, so credibility is the product — and a demo that cannot be looked at is not a
+proposal.
+
+### Shape
+
+Next.js 16, React 19, Tailwind 4, in `frontend/`. The backend's conventions translate directly: one
+boundary for the wire (`lib/api.ts`), settings read once (`lib/config.ts`), types mirroring the
+backend contract so a change there fails the type check here, and one stateful hook with everything
+else presentational.
+
+`automobile-rag-frontend` was copied in and owned here rather than referenced (D10). What did and did
+not transfer is recorded in D10's outcome — briefly, less than expected.
+
+### Two things the previous build got wrong that were rebuilt, not carried
+
+**Transport.** `useChatSocket.ts` is WebSocket where D9 chose SSE, and it fetched its step labels from
+a `/pipeline-status` endpoint returning a node → icon-and-label map. That is the invented-stages
+pattern D9 forbids: labels there described a diagram, not work. Ours come from `ctx.emit` at the
+moment the step ran.
+
+**Page mounting.** Jumping to page 249 set the render count to 249 and mounted every page from 1.
+PDF.js guidance is roughly 25 at once — a 10× overshoot, and the reported slowness. Replaced with a
+window of `PAGE_WINDOW` pages around the current one, with sized spacers standing in for the rest.
+
+### The spacer bug worth recording
+
+With windowing in place, scrolling from page 16 to 17 made 17 vanish. The spacers were sized from an
+assumed A4 ratio (1.414) and ignored the per-page `Page N` labels, so every page added a small error
+to the estimated scroll position. By page 17 the accumulated drift exceeded one page height and the
+window computed from `scrollTop` no longer contained the page being looked at.
+
+Fixed by measuring the real ratio from `page.getViewport({scale: 1})` on first load and removing the
+labels, so a row is exactly one page plus a fixed gap. Window widened 6 → 10 for headroom.
+
+The general lesson: virtualised scrolling is only correct while the estimated row height equals the
+real one. Any per-row chrome outside that estimate accumulates.
+
+### A dependency trap
+
+`pdfjs-dist` was installed at the top level, but `react-pdf` pins its own nested copy. The install
+script copied the hoisted worker, and the viewer failed with *"The API version 5.4.296 does not match
+the Worker version 5.7.284"* — surfaced to the user as "Could not open this manual". The worker is now
+resolved through `react-pdf`, and the top-level `pdfjs-dist` should be uninstalled.
+
+### pnpm → npm
+
+The commands in `CLAUDE.md` specified pnpm. It is not installed and neither is corepack, and the
+source repo shipped `package-lock.json` anyway. Switched to npm rather than adding a package manager
+to the setup a client would have to reproduce.
+
+### Commands
+
+```bash
+cd frontend && npm install          # runs copy-pdf-worker.mjs via postinstall
+npm run dev                          # port 3000; the API on 8000
+npm exec tsc -b --pretty false
+npm run lint
+npm run build
+```
+
+### Observed
+
+| Check | Result |
+|---|---|
+| `tsc -b` | clean |
+| `npm run lint` | clean, after ignoring `public/**` — eslint was linting the minified worker, 1,584 warnings |
+| `npm run build` | clean |
+| Manual answer → citation moves the pane | works |
+| Multi-page citation, all pages reachable by scrolling | works |
+| Repeated page appears once | works |
+| Web-routed question → dashed pills, opens a tab, pane untouched | works |
+| Out-of-scope question declines without stalling | works |
+| Reopening a past conversation | works, citations intact |
+| Jumping to a late page | responsive |
+
+Four `react-hooks/set-state-in-effect` errors, new in React 19, were each a real ordering bug rather
+than a lint nuisance — one of them was losing the first message of every conversation, because `send`
+captured `sessionId: null` from the render before the session existed.
+
+### Checkpoint
+
+- [x] The pipeline is drivable from a browser end to end.
+- [x] Page and web citations are visibly distinct (D13).
+- [x] Session history exists and reopens with citations.
+- [x] A conversation stays locked to its manual (D11).
+- [x] The PDF worker, cmaps and fonts are served locally — no CDN.
+- [x] Step labels come from the pipeline, never from a static map (D9).
+- [ ] `escalate` still returns an `error` frame, so safety questions dead-end in the UI.
+- [ ] `manual+general` and `escalate` still have no labelled eval rows.
+- [ ] `resolve_query` unbuilt — follow-ups are retrieved as standalone questions.

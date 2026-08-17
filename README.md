@@ -30,7 +30,11 @@ backend/          FastAPI app, pipeline steps, providers
     db.py         SQLite — manuals, sessions, messages
     pipeline/     resolve_query* → retrieve → rerank → gate → web_search → answer → escalate*
     providers/    Azure, LanceDB, Docling, Tavily adapters — SDK types stop here
-frontend/*        Next.js UI: manual picker, chat, PDF pane, session history, operator inbox
+frontend/         Next.js UI: manual picker, chat, PDF pane, session history, operator inbox*
+  src/lib/        config.ts and api.ts — the only place the wire format is known
+  src/types/      the backend contract, mirrored so a change there fails the type check
+  src/hooks/      use-chat-stream.ts — the one stateful piece
+  src/components/ chat/, pdf/, source/, layout/ — presentational
 eval/             questions.jsonl + run.py — the test suite for this project
 playground/       Experiment scripts. Not application code.
 scripts/          ingest.py, index.py and dev helpers
@@ -66,13 +70,28 @@ uv run --project backend --locked --no-sync python scripts/index.py \
 `data/` is derived state and gitignored. The same `--register-only` flag recovers the manual registry
 if `data/app.db` is lost, without paying for another embedding run.
 
-Then start the API:
+### The two halves, together
+
+Two terminals. The API first — it loads the cross-encoder at startup, which takes a few seconds and
+saves the first question from paying for it.
 
 ```bash
+# terminal 1 — API on 8000
 uv run --project backend --locked --no-sync uvicorn app.api:app --app-dir backend
+
+# terminal 2 — UI on 3000
+cd frontend && npm install && npm run dev
 ```
 
-Interactive docs are at `http://127.0.0.1:8000/docs`. They can drive every endpoint, but Swagger
+Then open `http://localhost:3000`, pick a manual, and ask something.
+
+`npm install` runs `scripts/copy-pdf-worker.mjs`, which puts the PDF.js worker in `public/`. Nothing
+loads from a CDN. If the viewer ever says *"Could not open this manual"*, check the browser console
+for an API/worker version mismatch and re-run `node scripts/copy-pdf-worker.mjs`.
+
+The UI reads `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
+
+Interactive API docs are at `http://127.0.0.1:8000/docs`. They can drive every endpoint, but Swagger
 buffers the whole SSE stream and shows it at the end — use curl to watch `/chat` actually stream.
 
 ### Poking it by hand
@@ -128,10 +147,26 @@ uv run --project backend --locked --no-sync ruff check .
 uv run --project backend --locked --no-sync python eval/run.py
 ```
 
+The frontend has its own three:
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false
+npm run lint
+npm run build
+```
+
 ## Status
 
 Built: ingestion, embedding and indexing; the `retrieve → rerank → gate → web_search → answer`
-pipeline; SSE transport; session persistence.
+pipeline; SSE transport; session persistence; the chat and PDF screens.
 
-Not built: `resolve_query`, `escalate` and the operator inbox, and the frontend.
-`docs/architecture.md` marks each of these `(not built)` and is kept in step with the code.
+Not built: `resolve_query`, `escalate` and the operator inbox. `docs/architecture.md` marks each
+`(not built)` and is kept in step with the code.
+
+Two consequences of that, both visible:
+
+- A safety-critical question routes to `escalate` and the stream returns an `error` frame instead of
+  an answer. Deliberate, not a crash — but it dead-ends in the UI.
+- A follow-up is retrieved as a standalone question, so *"what about the rear ones?"* will not find
+  the pages its predecessor did.

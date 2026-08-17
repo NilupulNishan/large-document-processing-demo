@@ -7,9 +7,12 @@ Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
 indexing. Of the online half, `retrieve`, `rerank`, `gate`, `web_search` and `answer` are built, along
-with the SSE transport and the SQLite session store; `playground/check_api.py` drives them end to end.
-`resolve_query`, `escalate`, the `escalations` table and the UI are not built. Each is marked
-**(not built)** below.
+with the SSE transport and the SQLite session store. The chat and PDF screens are built and drive
+those end to end from a browser. `resolve_query`, `escalate`, the `escalations` table and the operator
+inbox are not. Each is marked **(not built)** below.
+
+`escalate` is reachable — the gate routes safety-topic questions to it — but nothing implements it, so
+the API returns an `error` frame for those questions today.
 
 ## Two halves
 
@@ -208,13 +211,44 @@ which also embeds — so recovering a deleted `app.db` would otherwise cost a pa
 than the PDF index — the answer cites the printed number, the viewer navigates by the PDF index.
 Getting this backwards shows the wrong page to the user.
 
-## Screens — (not built)
+## Screens
 
-| Screen | Purpose |
+Next.js 16 with React 19 and Tailwind 4, in `frontend/`. One route, a resizable two-pane split.
+
+| Screen | Purpose | State |
+|---|---|---|
+| Chat | Manual picker, conversation, streamed answer, citation pills, session history panel | built |
+| PDF pane | Renders the cited page beside the answer; citations navigate it | built |
+| Operator inbox | Lists open escalations; opens the full handoff package for one (D12) | **(not built)** |
+
+The same shape as the backend: one boundary for the wire, settings read once, components
+presentational.
+
+| Module | Holds |
 |---|---|
-| Chat | Manual picker, conversation, streamed answer, citation pills, session history panel |
-| PDF pane | Renders the cited page beside the answer; citations navigate it |
-| Operator inbox | Lists open escalations; opens the full handoff package for one (D12) |
+| `lib/config.ts` | The API base URL and `PAGE_WINDOW`. The only place environment values are read. |
+| `types/chat.ts` | The backend contract — `Citation` discriminated on `type`, `Source`, the four `StreamEvent`s. A backend change fails the type check here. |
+| `lib/api.ts` | Every `fetch`, plus SSE frame parsing. `streamChat` is an async generator of typed events; nothing else knows the wire format. |
+| `hooks/use-chat-stream.ts` | Appends tokens, collects step labels, finalises on `done`. The only stateful piece. |
+| `components/` | `chat/`, `pdf/`, `source/`, `layout/`. Props in, callbacks out. |
+
+**The PDF pane mounts a window, not the document.** `PAGE_WINDOW` pages around the current one are
+rendered; the rest are sized spacers, so the scrollbar stays proportional and any page is reachable by
+scrolling. PDF.js degrades past roughly 25 pages mounted at once and the source project mounted every
+page from 1 to the one you jumped to — page 249 meant 249 canvases.
+
+Spacer height is `width × ratio`, where `ratio` is measured from the real page via
+`getViewport({scale: 1})` rather than assumed A4. An assumed ratio drifts a few pixels per page, and
+by page 17 the error exceeded a page height and pages appeared to vanish while scrolling.
+
+The worker is served from `public/`, copied at install time by `scripts/copy-pdf-worker.mjs` and
+resolved through `react-pdf` — never the hoisted `pdfjs-dist`, whose version can differ. `cmaps/` and
+`standard_fonts/` are vendored for the same local-first reason; the CJK cmaps are load-bearing for
+these manuals.
+
+Citation pills are visibly different by type, which is the D13 guard rather than styling: page pills
+are solid and drive the pane, web pills are dashed and open a tab. Repeated pages merge to one pill.
+`resolved` is not rendered — it is unstable run to run.
 
 ## Evaluation
 

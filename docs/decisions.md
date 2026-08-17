@@ -242,9 +242,27 @@ These do not transfer, and were counted as if they did:
   most consequential thing the UI does.
 
 Also: `pdfjs` loads its worker from a CDN, which breaks the local-first constraint and must be
-self-hosted; and the repo carries `package-lock.json` while this project uses pnpm.
+self-hosted.
 
 Net: the frontend is 1.5–2 days, and must start before day 4.
+
+**Outcome — reuse saved closer to a third of a day.** Revised twice downward, and the second revision
+came from opening files that turned out to be empty. `ui/badge.tsx`, `ui/button.tsx`, `ui/card.tsx`,
+`ui/loader.tsx`, `lib/utils.ts` and `lib/constants.ts` were all zero bytes, so the "small UI
+primitives" counted as transferring did not exist. They were deleted rather than filled in; Tailwind
+classes inline cover what they would have.
+
+Two things genuinely transferred and were worth the copy: the markdown renderer (tables, lists, code
+blocks, blockquotes) and the PDF toolbar's page navigation. Everything load-bearing was rewritten —
+transport, page windowing, citations, the shell.
+
+The estimate was wrong in a specific way worth naming: it was made from the file tree, not the file
+contents. A directory listing looks like reuse. Two of the three revisions would have been unnecessary
+had the files been read before the decision was written.
+
+`pdfjs-dist` was also installed at the top level while `react-pdf` pins its own nested copy. The two
+versions differed (5.4.296 against 5.7.284) and the viewer failed at runtime with an API/worker
+mismatch. The worker is now resolved through `react-pdf` rather than from the hoisted package.
 
 ---
 
