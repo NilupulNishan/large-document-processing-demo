@@ -3,7 +3,7 @@
 import os
 from functools import cache
 
-from app.config import MODELS_DIR, RERANK_MAX_TOKENS, RERANKER_MODEL
+from app.config import MODELS_DIR, RERANK_MAX_TOKENS, RERANK_WINDOW_OVERLAP, RERANKER_MODEL
 
 _ONNX_DIR = MODELS_DIR / RERANKER_MODEL.replace("/", "__")
 
@@ -37,7 +37,12 @@ def _model():
 
 
 def score(query: str, passages: list[str]) -> list[float]:
-    """Relevance of each passage to the query, judged jointly. Higher is better."""
+    """
+    Relevance of each passage to the query, judged jointly. Higher is better.
+
+    A passage longer than the model's window is scored by its best window, not its first.
+    Spec tables run to thousands of tokens and the answer is rarely in the opening rows.
+    """
     if not passages:
         return []
 
@@ -46,9 +51,17 @@ def score(query: str, passages: list[str]) -> list[float]:
         [query] * len(passages),
         passages,
         padding=True,
-        truncation=True,
+        truncation="only_second",
         max_length=RERANK_MAX_TOKENS,
+        stride=RERANK_WINDOW_OVERLAP,
+        return_overflowing_tokens=True,
         return_tensors="np",
     )
+    # One row per window; this maps each back to the passage it came from.
+    windows = inputs.pop("overflow_to_sample_mapping")
     logits = model(**inputs).logits
-    return [float(row[0]) for row in logits]
+
+    best = [float("-inf")] * len(passages)
+    for row, passage in zip(logits, windows, strict=True):
+        best[passage] = max(best[passage], float(row[0]))
+    return best

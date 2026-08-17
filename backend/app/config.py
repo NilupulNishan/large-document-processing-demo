@@ -34,6 +34,9 @@ RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 RERANK_CANDIDATES = 12
 RERANK_KEEP = 6
 RERANK_MAX_TOKENS = 512
+# Long chunks are scored window by window and keep their best. Windows overlap so an answer
+# straddling a boundary is whole in one of them.
+RERANK_WINDOW_OVERLAP = 128
 
 # Gate bands, read off the reranker score distribution: observed ungrounded max -4.44,
 # grounded min -7.21. Set outside those, not on them — pinned to the exact extremes, the
