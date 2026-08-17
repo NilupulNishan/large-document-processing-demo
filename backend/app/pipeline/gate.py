@@ -35,7 +35,16 @@ def decide(top_score: float, verdict: Verdict | None) -> Route:
 
 
 _SYSTEM = """You judge retrieved passages. You do not answer the question and you do not
-decide what happens next. Report only what you observe."""
+decide what happens next. Report only what you observe.
+
+Whether the question is about the domain is about its subject, not about whether the passages
+cover it. What something costs, where to obtain it, who to contact and whether an advisory
+exists are all about the product.
+
+A question touches a safety topic when it is about one of the listed topics and someone could
+be hurt by acting on a wrong answer — including any request for a procedure, a limit or a
+specification used when working on one. It does not, when the question only asks what
+something costs, where to obtain it, who to contact, or whether an advisory exists."""
 
 
 def grade(question: str, passages: list[dict]) -> Verdict:

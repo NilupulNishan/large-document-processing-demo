@@ -25,25 +25,6 @@ def _build_converter():
     )
 
 
-def _markdown_tables():
-    """
-    Docling's default writes one sentence per cell, repeating the row label in every one:
-    `Total mass of quasi-trailer (T), BJ6470X52MHEV = 1.5.` Neither the reranker nor the
-    grader reads that as an answer. See build-log Slice 10.
-    """
-    from docling_core.transforms.chunker.hierarchical_chunker import (
-        ChunkingDocSerializer,
-        ChunkingSerializerProvider,
-    )
-    from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
-
-    class MarkdownTableProvider(ChunkingSerializerProvider):
-        def get_serializer(self, doc):
-            return ChunkingDocSerializer(doc=doc, table_serializer=MarkdownTableSerializer())
-
-    return MarkdownTableProvider()
-
-
 def _build_chunker():
     import tiktoken
     from docling.chunking import HybridChunker
@@ -55,7 +36,6 @@ def _build_chunker():
             max_tokens=MAX_EMBEDDING_TOKENS,
         ),
         merge_peers=True,
-        serializer_provider=_markdown_tables(),
     )
 
 

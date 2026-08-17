@@ -414,12 +414,12 @@ Numbers and re-verification commands in `docs/pricing.md`.
 
 ---
 
-## D16 — Long chunks are reranked by their best window, and tables are serialised as markdown
+## D16 — Long chunks are reranked by their best window; tables keep Docling's default format
 
 **Decision.** The cross-encoder scores every window of an oversized chunk and keeps the highest.
-Docling's chunker serialises tables as markdown rather than as one sentence per cell.
+Table serialisation stays on Docling's default — markdown was built, measured and reverted.
 
-**Why the first.** `RERANK_MAX_TOKENS` is 512 because that is the model's window, not a tuning
+**Why the windowing.** `RERANK_MAX_TOKENS` is 512 because that is the model's window, not a tuning
 choice. Chunks are sized for the embedder's 8,191, so the two disagree by an order of magnitude and
 the reranker silently read the first 512 tokens of everything. Measured: 11% of BJ30's tokens and 22%
 of X55's were unreachable, and the chunk holding the towing capacity was read to 22% — the answer sat
@@ -428,28 +428,71 @@ arrangement.
 
 Rejected: raising the limit, which the model does not support; and shrinking chunks to 512 tokens,
 which would triple the chunk count and split procedures across boundaries to fix a reranking problem.
-Windowing costs about 31% more reranking latency and touches only the 6–9% of chunks that overflow —
-a chunk that fits produces one window and scores exactly as before.
+Windowing costs about 31% more reranking latency and touches only the 6–9% of chunks that overflow.
 
-**Why the second.** Docling's default `TripletTableSerializer` writes one sentence per cell and
-repeats the row label in each:
+**Why markdown tables were tried.** Docling's default `TripletTableSerializer` writes one sentence
+per cell and repeats the row label in each:
 
 ```
-Total mass of quasi-trailer (T), Vehicle models = Total mass of quasi-trailer (T).
 Total mass of quasi-trailer (T), BJ6470X51MHEV = -.
 Total mass of quasi-trailer (T), BJ6470X52MHEV = 1.5.
 ```
 
-The header row becomes a self-referential cell and empty cells become `= .`. Windowing put that chunk
-back in the top 5, and the grader then reported that it does not answer the question. It does; the
-answer is `1.5`. The representation defeats the reranker and the grader independently, which is why
-this is an ingestion fix and not a retrieval one.
+Windowing put that chunk back in the top 5 and the grader still reported that it does not answer the
+question. It does; the answer is `1.5`. Markdown looked like the fix.
 
-The triplet format is not arbitrary — every cell self-describes, so a table split across chunks stays
-readable. Markdown trades that for density, and the risk is a split that separates rows from their
-header. That is measured after ingest rather than assumed, in `playground/check_tables.py`.
+**Why it was reverted.** Measured against the same eval set with the grader at temperature 0:
 
-**Cost.** Re-ingest and re-embed. Embedding the whole corpus is roughly 190k tokens at $0.130/1M —
-about 2.5 cents. Conversion is the expensive half at ~10 minutes a manual, so `parse()` now caches
-the converted document under `data/parsed/` and chunking reruns in seconds. `--reparse` forces the
-models to run again.
+| | markdown | triplet |
+|---|---|---|
+| Overall Recall@1 / MRR | 85% / 0.902 | 85% / 0.902 |
+| `spec` Recall@1 / MRR | 71% / 0.821 | **86% / 0.893** |
+| `procedure` Recall@1 / MRR | **86% / 0.906** | 82% / 0.883 |
+| `bj30-02` engine oil quantities | `manual+general` | **`manual`** |
+| `bj30-23` trailer weight | `escalate` | `escalate` |
+
+It trades spec accuracy for procedure accuracy, and **the thing it was built to fix did not move** —
+`bj30-23` grades identically under both. The triplet format's verbosity is not waste: every cell
+self-describes, so a table split across chunks stays readable and every row carries its own label into
+the retrieval index.
+
+One real defect surfaced on the way and is worth keeping in mind if this is revisited: Docling pads
+markdown rule rows to the column width, so a wide table's `|---|` line ran to 633 characters. The
+reranker tokenises each dash separately, so the rule row alone exceeded the entire 512-token window
+and no data row was ever read. That made the first markdown attempt score *worse* than the default.
+
+**What was kept.** Conversion is the expensive half at ~10 minutes a manual, so `parse()` caches the
+converted document under `data/parsed/` and re-chunking runs in seconds — 11.3 min to 6 s, measured.
+That is what made a chunking experiment affordable enough to run and reject on evidence. `--reparse`
+forces the models to run again.
+
+---
+
+## D17 — Model calls run at temperature 0, and the grader's fields say what they mean
+
+**Decision.** `complete()` and `complete_stream()` default to `temperature=0.0`. The grader's system
+prompt defines its two judgement fields explicitly.
+
+**Why.** Both calls ran at the API default of 1.0. Measured over five identical runs of every question
+that reaches the grader, **4 of 15 changed route between runs** — same question, same passages, same
+index. D2 says routing is deterministic Python over model evidence; that holds only if the evidence is
+stable. An eval harness over a component that disagrees with itself is not a test suite.
+
+Temperature 0 alone took instability to 2/15. The remainder was ambiguity in the fields themselves:
+
+- `question_is_about_the_domain` was read as *"do the passages cover it"*, so "how much does this car
+  cost new" was judged off-domain and **declined** — the worst available outcome for a real question.
+- `question_touches_a_safety_topic` fired on "where is my nearest service centre".
+
+The fix names the distinction the eval rows actually show: a question touches a safety topic when it
+asks for a **procedure, limit or specification** on a listed topic, and does not when it asks what
+something costs, where to get it, who to contact, or whether an advisory exists.
+
+**A first attempt made it worse and is recorded rather than hidden.** Wording it as "a commercial or
+administrative question is not a safety topic" fixed two general-route questions and broke three
+escalations — the model read any practical question as administrative. On a safety route a missed
+escalation is worse than a spurious one, so that trade was rejected.
+
+**Measured after.** Route instability **4/15 → 0/15**, and misroutes across the 52-row set **6 → 3**.
+The three that remain are `bj30-23` and `bj30-02` — both table lookups, neither fixed by changing the
+table format — and `esc-06`, which scores −2.07 and never reaches the grader at all.

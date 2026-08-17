@@ -20,8 +20,11 @@ def _page_span(pages: Sequence[int]) -> int:
 
 def _combine(group: list[Chunk], frequency: Counter[str]) -> Chunk:
     pages = sorted({page for chunk in group for page in chunk.pages})
-    # Least frequent heading first: a heading on many chunks locates nothing.
-    headings = sorted({h for chunk in group for h in chunk.headings}, key=lambda h: frequency[h])
+    # Least frequent heading first: a heading on many chunks locates nothing. The name breaks
+    # ties, or set iteration order does and the same PDF ingests to a different index each run.
+    headings = sorted(
+        {h for chunk in group for h in chunk.headings}, key=lambda h: (frequency[h], h)
+    )
     return Chunk(
         text="\n\n".join(chunk.text for chunk in group),
         pages=tuple(pages),
