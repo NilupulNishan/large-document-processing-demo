@@ -59,8 +59,13 @@ def embed_query(text: str) -> list[float]:
     return embed_texts([text])[0]
 
 
-def complete[T: BaseModel](system: str, user: str, schema: type[T]) -> T:
-    """Structured completion. Raises if the model returns nothing parseable."""
+def complete[T: BaseModel](system: str, user: str, schema: type[T], temperature: float = 0.0) -> T:
+    """
+    Structured completion. Raises if the model returns nothing parseable.
+
+    Temperature 0 by default: at the API default of 1 the grader returned different verdicts
+    for identical inputs, which moved 4 of 15 questions to a different route (Slice 10).
+    """
     if not AZURE_OPENAI_CHAT_DEPLOYMENT:
         raise RuntimeError("Missing in backend/.env: AZURE_OPENAI_CHAT_DEPLOYMENT")
 
@@ -71,6 +76,7 @@ def complete[T: BaseModel](system: str, user: str, schema: type[T]) -> T:
             {"role": "user", "content": user},
         ],
         response_format=schema,
+        temperature=temperature,
     )
     parsed = response.choices[0].message.parsed
     if parsed is None:
@@ -108,7 +114,12 @@ def _prose_so_far(buffer: str, field: str) -> str | None:
 
 
 def complete_stream[T: BaseModel](
-    system: str, user: str, schema: type[T], on_token: Callable[[str], None], field: str = "answer"
+    system: str,
+    user: str,
+    schema: type[T],
+    on_token: Callable[[str], None],
+    field: str = "answer",
+    temperature: float = 0.0,
 ) -> T:
     """Structured completion that streams one field's prose as it arrives (D9)."""
     if not AZURE_OPENAI_CHAT_DEPLOYMENT:
@@ -122,6 +133,7 @@ def complete_stream[T: BaseModel](
             {"role": "user", "content": user},
         ],
         response_format=schema,
+        temperature=temperature,
     ) as stream:
         for event in stream:
             if event.type != "content.delta":
