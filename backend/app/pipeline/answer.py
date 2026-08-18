@@ -44,6 +44,17 @@ authority to ask, never the searching you did or what you were or were not shown
 _UNGROUNDED = """Their manual does not cover this, so answer from general knowledge instead. Give
 the full answer and cite nothing. Do not add a disclaimer — one is prepended for you."""
 
+_CONTINUING = """You are continuing a conversation, not starting one. Below is what you told
+this user on the previous turn.
+
+Continue from the point they have actually told you they reached, and no further. Never assume
+they have done anything they have not said they have done — on a procedure that is how someone
+gets hurt. Briefly acknowledge where they are, skip only the steps they have clearly completed,
+and give them the next ones in order.
+
+Previously told to them:
+{prior}"""
+
 # Prepended in Python, not asked for in the prompt. Asked for, the model supplied it on one run
 # and silently dropped it on the next, and an unmarked general answer is the worst output we
 # can produce (D13). The UI badge is not enough — it does not survive copy and paste.
@@ -120,8 +131,19 @@ class AnswerStep:
         # Context rides in the system message, not the user's. Sent as part of the user turn
         # the model kept calling it "the information you provided" — literally true, and
         # meaningless to a user who supplied nothing but a question.
-        system = f"{_SYSTEM.format(domain=DOMAIN_DESCRIPTION)}\n\n{instruction}\n\n{context}"
-        user = ctx.question
+        prior = next(
+            (m["content"] for m in reversed(ctx.history) if m["role"] == "assistant"), ""
+        )
+        parts = [_SYSTEM.format(domain=DOMAIN_DESCRIPTION), instruction]
+        if context:
+            parts.append(context)
+        # Last, not before the passages: ahead of them the model followed the passages and
+        # replayed the procedure from step one.
+        if prior:
+            parts.append(_CONTINUING.format(prior=prior[:1200]))
+        system = "\n\n".join(parts)
+        # The resolved question. RetrieveStep guarantees this is set (D20).
+        user = ctx.query
 
         # The disclaimer leads the stream too, so it is on screen before the guidance is.
         prefix = "" if grounded else _NOT_IN_MANUAL

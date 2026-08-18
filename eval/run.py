@@ -18,6 +18,7 @@ sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backen
 
 from app.config import GATE_HIGH, GATE_LOW, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
 from app.pipeline.gate import decide, grade  # noqa: E402
+from app.pipeline.resolve import resolve  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
 from app.providers.reranker import rank  # noqa: E402
@@ -48,10 +49,14 @@ def main() -> None:
     started = time.perf_counter()
 
     for row in rows:
-        hits = search(
-            row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
-        )
-        scored = rank(row["question"], [h["text"] for h in hits])
+        # Mirrors the pipeline: a row with history is rewritten before anything searches (D20).
+        query = row["question"]
+        if row.get("history"):
+            query = f"{resolve(row['question'], row['history'])} {row['question']}"
+        row["query"] = query
+
+        hits = search(row["manual"], query, embed_query(query), limit=RERANK_CANDIDATES)
+        scored = rank(query, [h["text"] for h in hits])
         ordered = [
             h | {"excerpt": excerpt}
             for (_, excerpt), h in sorted(zip(scored, hits, strict=True), key=lambda p: -p[0][0])
@@ -62,7 +67,7 @@ def main() -> None:
         row["rerank_rank"] = hit_rank(ordered, expected)
         row["top_score"] = top = max((value for value, _ in scored), default=0.0)
         # The gate as it runs at query time: above the band no grader is called (D2).
-        verdict = None if top > GATE_HIGH else grade(row["question"], ordered[:RERANK_KEEP])
+        verdict = None if top > GATE_HIGH else grade(query, ordered[:RERANK_KEEP])
         row["route"] = decide(top, verdict)
 
     grounded = [r for r in rows if r["expected_pages"]]

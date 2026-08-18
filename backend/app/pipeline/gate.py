@@ -63,7 +63,7 @@ class GateStep:
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
         # Above HIGH no grader has ever been needed, so no call is made or announced.
-        verdict = None if ctx.top_score > GATE_HIGH else grade(ctx.question, ctx.passages)
+        verdict = None if ctx.top_score > GATE_HIGH else grade(ctx.query, ctx.passages)
         if verdict is not None:
             ctx.emit(self.name, "Checked whether the manual covers this")
 

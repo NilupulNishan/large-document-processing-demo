@@ -1159,3 +1159,130 @@ uv run --project backend --locked --no-sync python playground/check_evidence.py
 - [ ] The `GATE_HIGH` bypass lets an unanswerable specification question through as `manual`. No
       threshold closes it; always grading costs 1.6 s and one regression. Decision open (D19).
 - [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.
+
+---
+
+## Slice 12 — `resolve_query`: a conversation that remembers the turn before
+
+### Outcome
+
+Follow-up turns work. `resolve_query` was the last unbuilt step of the online pipeline; with it, all
+seven are built. Routing accuracy **93% (53/57)** over a set that now includes four follow-up rows.
+
+### The report
+
+Two turns in the browser. "how can I change flat tire" answered correctly from pages 244, 245 and
+253. Then "I parked vechile whats now" — best match "Displayed", and a handoff reference.
+
+Nothing in the gate was wrong. Retrieved on its own, that sentence has no subject; the grader reported
+truthfully that the passages did not answer it; the topic read as safety-critical; the gate escalated,
+which is what D13 says to do when the manual is silent on a safety topic. **The escalation was correct
+behaviour on a meaningless input.** Every turn was being treated as the first, because
+`build_pipeline()` began at `retrieve` and said so in its own docstring.
+
+### The rewrite that reads well and retrieves nothing
+
+The first prompt asked for a standalone question and got one: *"I parked the vehicle—what should I do
+next?"* It is fluent, it stands alone, and it has thrown away the flat tyre. Score −7.04 → −4.82, and
+still `escalate` — a change that looks like progress in the numbers and fixes nothing.
+
+Requiring the rewrite to **name the task**, and saying plainly that "what should I do next" without
+naming what is being done has failed, took the same turn to −7.04 → **−1.77** and route `manual`.
+Recorded in D20, because the failure is the instructive half.
+
+### What reads the rewrite
+
+Retrieval, the grader and the answer, all through `ctx.query`. Grading the raw turn would have
+escalated it again for exactly the original reason.
+
+The answer step additionally receives the previous assistant turn, and that took three attempts.
+Placed before the passage block it was ignored outright — the model replayed the procedure from "park
+on a firm, level surface". Moved after the passages and told to "begin from the first step they have
+not yet done", it swung the other way and announced the wheel change was done, handing over torque
+figures to someone who had not jacked the car. **Replaying a step is an annoyance; skipping one is an
+injury**, and the second version was the worse failure despite reading better. What holds is pinning
+it to reported progress only: continue from where they said they are, and assume nothing further.
+
+It is still not a procedure walk-through. "What should I do next" retrieves the tail of the procedure,
+so the reply offers the closing branches rather than jacking and removal. Recorded as open in D20.
+
+### The harness measures it now
+
+Four rows carry a `history` array and are rewritten through `resolve()` before searching, the same
+call the pipeline makes. A follow-up feature verified only by a playground script is not covered by
+the test suite, and rule 4 says the harness is the test suite.
+
+Recall@1 fell 85% → 81% and MRR 0.905 → 0.881. **That is not a regression.** Three harder grounded
+rows entered the denominator; the existing rows' rerank positions are unchanged, which the "moved
+down" list confirms — the same three rows as Slice 11, plus the new `fu-01`.
+
+### Two open defects met again from a new direction
+
+`fu-03` — the X55 asked for a wheel nut torque as a *follow-up* — misroutes to `manual` at −1.00,
+above `GATE_HIGH`, never reaching the grader. Identical to `esc-06`, reached by a different path.
+D19's bypass is now visible in two shapes in the eval, which is the argument for closing it.
+
+`bj30-02` and `bj30-16` continue to trade places as the flaky row near the band. Slice 11 recorded
+that instability is not zero across the whole set; this run is the second observation of it.
+
+### Rejected on the way: a richer verdict for the gate
+
+Before building any of this, the gate's three booleans were replaced with `needs` / `coverage` /
+`evidence_quote` / `finding`, on the theory that one bit cannot separate "the manual is silent" from
+"the manual discusses this without stating the number". Measured over five runs of eight rows:
+**one fixed, four broken.** `partial` proved a magnet — `bj30-02`, whose answer is present and
+quotable, was called partial 5/5 and demoted to `manual+general` — and `dec-01` destabilised to 3/5.
+
+It fixed `esc-06`. So does calling the existing grader, which routes that question correctly 5/5
+already. The redesign was solving a problem the bypass creates. Kept in
+`playground/check_verdict.py` so it is not retried blindly.
+
+### While proving that, the reason `x55-08` misroutes turned up
+
+The grader is right about it. "descent" appears in **none** of the six retrieved passages and nowhere
+in the X55 corpus. The chunk that does explain the feature — pdf 127–128, *"touch the HDC switch, and
+the HDC enters the standby state"* — says only "HDC", and its `heading_path` is `1. Wear > ON/OFF`.
+The neighbouring chunk got the heading `Automatic release > HDC` while its body is about AVH.
+
+`index.py` prepends `heading_path` into the embedded text, so a wrong heading actively pollutes the
+vector. **10 of 213 BJ30 chunks and 26 of 262 X55 chunks** carry a page header or a list number as
+their leading heading.
+
+This matters beyond one row: `x55-08` is the only measured obstacle to always calling the grader, and
+it is a *retrieval* fault, not a grader fault. D4's LLM-written context sentence — documented, and
+marked `(not built)` in `architecture.md` — is the mechanism designed for exactly this. `AGENTS.md`
+claimed it was built; corrected.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+uv run --project backend --locked --no-sync python playground/check_followup.py
+uv run --project backend --locked --no-sync python playground/check_verdict.py
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| "I parked vechile whats now" | `escalate`, −7.04 | **`manual`, −1.77** |
+| "and how much do I need?" | `general`, −8.43 | **`manual`, −5.05** |
+| Routing accuracy | 94% (50/53) | 93% (53/57) |
+| Follow-up rows in the harness | 0 | **4** |
+| Online pipeline steps built | 6 of 7 | **7 of 7** |
+
+### Checkpoint
+
+- [x] A follow-up turn is rewritten before anything searches.
+- [x] The grader and the answer read the resolved question, not the raw turn.
+- [x] The answer continues from reported progress instead of replaying from step one.
+- [x] A first turn makes no rewrite call and emits no `resolve_query` event (D9).
+- [x] Follow-up behaviour is measured by the harness, not only by a playground script.
+- [ ] `fu-03` and `esc-06` — the `GATE_HIGH` bypass, unchanged and open (D19).
+- [ ] `bj30-23` — table serialisation, unchanged and open (D16).
+- [ ] A follow-up mid-procedure gets the closing branches, not the next step. Retrieval does not
+      know where in a procedure a question sits (D20).
+- [ ] D14's `unresolved_streak`: no column, no triggers. Two of them are now unblocked.
+- [ ] D4's context sentence — the fix for `x55-08`, and the precondition for closing the bypass.
+- [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.

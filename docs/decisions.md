@@ -549,3 +549,63 @@ to the grader. The cross-encoder measures whether the manual *discusses* a topic
 where a confident wrong answer does the most damage. Recalibrating the band, which Slice 10 proposed,
 would not have worked. The remaining options are to call the grader on every question (+1.6 s on the
 37 of 53 rows that currently bypass, and `x55-08` regresses) or to accept the gap. **Open.**
+
+---
+
+## D20 — A follow-up is rewritten before retrieval, and the rewrite must name its subject
+
+**Decision.** `ResolveQueryStep` runs first. With no history it returns immediately — no model call,
+no step event. With history it rewrites the turn into a standalone question from the last 6 **user**
+turns and sets `ctx.query` to `f"{rewrite} {question}"`. Everything downstream reads `ctx.query`:
+retrieval, the grader, and the answer.
+
+**Why.** Every turn was being treated as the first. Reported from the browser: "how can I change flat
+tire" answered correctly, then "I parked vechile whats now" retrieved as a standalone question, best
+match "Displayed", nothing relevant. The grader truthfully reported that the passages did not answer
+it, the subject read as a safety topic, and the gate escalated. The user got a handoff reference for a
+question the manual answers two pages from where it had just been. **The gate was right; its input was
+meaningless.**
+
+**The grader and the answer read the rewrite too, not just retrieval.** Grading the raw turn would
+have escalated it again for the same reason, and answering the raw turn produces a reply to "whats
+now" with no subject. `RetrieveStep` already did `ctx.query = ctx.query or ctx.question`, so
+`ctx.query` is always set by the time either runs.
+
+**The first prompt failed, and how it failed is the point.** Asked only to make the question
+standalone, the model returned *"I parked the vehicle—what should I do next?"* — fluent, self-
+contained, and stripped of the subject. Retrieval had nothing to match and it escalated anyway; the
+score moved −7.04 → −4.82 and the route did not change. The prompt now requires the rewrite to name
+the task, taking it from the earlier turns, and says outright that "what should I do next" without
+naming what is being done has failed. Same question: −7.04 → **−1.77**, route `manual`.
+
+**Concatenated, not replaced.** The rewrite is a model's paraphrase; the user's own words are the ones
+BM25 has term statistics for. Keeping both costs nothing and cannot lose a term the rewrite dropped.
+
+**Measured.** Three of four follow-up pairs route correctly. `and how much do I need?` went `general`
+→ `manual` (−8.43 → −5.05). The fourth is the X55 torque follow-up, which fails on D19's `GATE_HIGH`
+bypass, not on the rewrite — it is the same open defect as `esc-06`, reached by a different path.
+
+**Two limits, chosen and recorded.** The rewrite reads user turns only, so a reference to something
+*the assistant* said — "the second one you mentioned" — cannot be resolved. And the 6-turn window has
+no topic-boundary detection, so a subject change further back can still leak in. Neither is hit by the
+reported transcript; the first is the more likely to be met in a demo.
+
+**The answer step separately receives the previous assistant turn**, truncated, and it took three
+attempts to make that safe rather than merely different.
+
+1. Placed before the passages, it was ignored: the model replayed the procedure from "park on a firm,
+   level surface" to someone who had just said they parked. The passage block is large and came last.
+2. Moved after the passages and worded as "begin from the first step they have not yet done", it
+   over-corrected into the **dangerous** direction — it announced "you're at the wheel change is done
+   point" and gave post-change torque figures to a user who had not jacked the car or removed a wheel.
+   On a procedure, replaying a step is an annoyance and skipping one is an injury.
+3. Worded as "continue from the point they have actually told you they reached, and no further; never
+   assume they have done anything they have not said they have done", it opens by acknowledging what
+   they reported and carries on from there.
+
+**Residual, and open.** The answer can only use the passages it is given, and "what should I do next"
+retrieves the *tail* of a procedure. The reply therefore offers the closing branches — repair kit
+versus wheel change — rather than the precise next step of jacking and removal. Better than the
+escalation it replaced and better than a full replay, but it is not yet a procedure the assistant
+walks someone through position by position. That needs retrieval to know where in a procedure the
+question sits, which nothing in the pipeline models today.

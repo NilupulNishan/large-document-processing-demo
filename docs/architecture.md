@@ -6,10 +6,10 @@ If a component named here does not exist yet, it is marked **(not built)**.
 Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
-indexing. Of the online half, `retrieve`, `rerank`, `gate`, `web_search` and `answer` are built, along
-with the SSE transport, the SQLite session store and `escalate`. The chat and PDF screens are built
-and drive those end to end from a browser. `resolve_query` and the operator inbox are not. Each is
-marked **(not built)** below.
+indexing. The online half is built end to end — `resolve_query`, `retrieve`, `rerank`, `gate`,
+`web_search`, `answer` and `escalate` — along with the SSE transport and the SQLite session store.
+The chat and PDF screens drive those from a browser. The operator inbox is not built, nor is D14's
+`unresolved_streak` counter. Each is marked **(not built)** below.
 
 ## Two halves
 
@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph online["Online — FastAPI, SSE"]
-        q[User question] --> resolve["1 resolve_query<br/>(not built)"]
+        q[User question] --> resolve["1 resolve_query"]
         resolve --> retrieve["2 retrieve"]
         retrieve --> rerank["3 rerank"]
         rerank --> gate["4 gate"]
@@ -55,13 +55,18 @@ flowchart TB
 ## Pipeline steps
 
 Each step is a class in `backend/app/pipeline/` with one `run(ctx)` method. `build_pipeline()`
-assembles them in order. Adding a capability means adding a step. Steps 2 through 7 are built;
-`build_pipeline()` returns those six.
+assembles them in order. Adding a capability means adding a step. All seven are built;
+`build_pipeline()` returns them in this order.
 
-**1 · resolve_query — (not built)** — If the turn is a follow-up, rewrite it into a standalone question using the
-last ~6 user turns, then concatenate the rewrite with the raw question. If there is no history, pass
-through untouched. Also classifies whether the user is reporting that a previous suggestion failed,
-which drives `unresolved_streak` (D14). This is what makes a reopened conversation continue correctly.
+**1 · resolve_query** — If the turn is a follow-up, rewrite it into a standalone question using the
+last ~6 user turns, then concatenate the rewrite with the raw question so the user's own wording still
+feeds BM25. If there is no history, pass through untouched — no model call and no step event. The
+rewrite must name the task it concerns; "what should I do next" without naming what is being done
+retrieves nothing, which is how it first failed (D20). Everything downstream reads `ctx.query`, so
+retrieval, the grader and the answer all see the resolved question.
+
+The classification of whether the user is reporting that a previous suggestion failed, which would
+drive `unresolved_streak` (D14), is **(not built)**.
 
 **2 · retrieve** — Hybrid search in LanceDB scoped to the session's manual: BM25 full-text and dense
 vector in parallel, fused with Reciprocal Rank Fusion at k=60. Returns 12 candidates carrying page
@@ -140,7 +145,9 @@ and streams the user a confirmation carrying its reference. It sets `ctx.escalat
 the D13 distinction the UI renders keeps its meaning. The API emits an `escalated` event for it.
 
 Only D14's gate-rule trigger is reachable. **Asking for a person, the unresolved streak, and
-manual-weak-and-web-weak are (not built)** — all three need `resolve_query`.
+manual-weak-and-web-weak are (not built).** The first two are now unblocked — `resolve_query` exists
+and D14 notes the classification rides on its call — but neither the `unresolved_streak` column nor
+the triggers are written.
 
 ## Transport
 
@@ -271,11 +278,15 @@ are solid and drive the pane, web pills are dashed and open a tab. Repeated page
  "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 53 rows cover four of the
-five: `manual` 40, `escalate` 7, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
-that path is unmeasured.** `kind` is `procedure` 22, `safety` 12, `spec` 8, `symptom` 5, `absent` 4,
+`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 57 rows cover four of the
+five: `manual` 43, `escalate` 8, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
+that path is unmeasured.** `kind` is `procedure` 23, `safety` 13, `spec` 10, `symptom` 5, `absent` 4,
 `offtopic` 2, so weakness can be located rather than just observed. Pages are labelled from the source
 text, never from retrieval output.
+
+Four rows carry an optional `history` array of earlier turns. The harness rewrites those through
+`resolve()` before searching, exactly as the pipeline does, so follow-up behaviour is measured rather
+than assumed. A row without `history` is untouched by that path.
 
 `eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind, scoring fusion order
 against reranked order over the same candidates. It then reports **routing accuracy** for the gate

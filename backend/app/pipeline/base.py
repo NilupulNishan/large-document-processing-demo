@@ -40,6 +40,8 @@ class PipelineContext(BaseModel):
     manual: str
     # None for eval and playground runs, which have no conversation to hand over.
     session_id: str | None = None
+    # Earlier turns, oldest first. Filled at the HTTP boundary; empty on a first turn.
+    history: list[dict] = []
 
     query: str = ""
     candidates: list[dict] = []
@@ -84,8 +86,15 @@ class Pipeline:
         manual: str,
         sink: Callable[[str, dict], None] | None = None,
         session_id: str | None = None,
+        history: list[dict] | None = None,
     ) -> PipelineContext:
-        ctx = PipelineContext(question=question, manual=manual, sink=sink, session_id=session_id)
+        ctx = PipelineContext(
+            question=question,
+            manual=manual,
+            sink=sink,
+            session_id=session_id,
+            history=history or [],
+        )
         for index, step in enumerate(self.steps, start=1):
             logger.info("[%d/%d] %s", index, len(self.steps), step.name)
             ctx = step.run(ctx)

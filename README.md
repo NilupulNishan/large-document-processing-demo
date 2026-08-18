@@ -28,7 +28,7 @@ backend/          FastAPI app, pipeline steps, providers
   app/
     api.py        HTTP routes and SSE framing
     db.py         SQLite — manuals, sessions, messages
-    pipeline/     resolve_query* → retrieve → rerank → gate → web_search → answer → escalate*
+    pipeline/     resolve_query → retrieve → rerank → gate → web_search → answer → escalate
     providers/    Azure, LanceDB, Docling, Tavily adapters — SDK types stop here
 frontend/         Next.js UI: manual picker, chat, PDF pane, session history, operator inbox*
   src/lib/        config.ts and api.ts — the only place the wire format is known
@@ -121,16 +121,18 @@ Questions that exercise each route:
 |---|---|
 | "How do I change a flat tyre?" | `source=manual`, page citations, no `gate` event |
 | "What engine oil does it take?" | `source=manual`, preceded by a `gate` event |
+| then "I parked it, what now?" | a `resolve_query` event, then `source=manual` — not a new topic |
 | "What does the warranty cover?" | `source=general`, a `web` event, `[web]` citations |
 | "Write me a poem about the sea" | `decline`, one short refusal, no model call |
 
-Two step events are worth watching. A `gate` event appears only when the top score fell below
+Three step events are worth watching. A `gate` event appears only when the top score fell below
 `GATE_HIGH` and a grader call actually ran — seeing one on a question that answered confidently is a
 bug. A `web` event appears only on the `general` route; on a manual-answered question it means the
-gate misrouted.
+gate misrouted. A `resolve_query` event appears only on a follow-up turn — seeing one on the first
+question of a conversation is a bug, since there is no history to read.
 
-Safety-critical questions the manual does not cover route to `escalate`, which is **not built** — the
-stream returns an `error` frame rather than an answer. That is deliberate, not a crash.
+Safety-critical questions the manual does not cover route to `escalate`: the stream ends with an
+`escalated` frame carrying a reference, and the handoff record holds the transcript.
 
 The scripted equivalent, with per-frame timing:
 
@@ -158,15 +160,18 @@ npm run build
 
 ## Status
 
-Built: ingestion, embedding and indexing; the `retrieve → rerank → gate → web_search → answer`
-pipeline; SSE transport; session persistence; the chat and PDF screens.
+Built: ingestion, embedding and indexing; the full
+`resolve_query → retrieve → rerank → gate → web_search → answer → escalate` pipeline; SSE transport;
+session persistence; the chat and PDF screens.
 
-Not built: `resolve_query`, `escalate` and the operator inbox. `docs/architecture.md` marks each
-`(not built)` and is kept in step with the code.
+Not built: the operator inbox, and D14's `unresolved_streak` counter with the two escalation triggers
+that depend on it. `docs/architecture.md` marks each `(not built)` and is kept in step with the code.
 
-Two consequences of that, both visible:
+Three known gaps, all measured and recorded rather than hidden:
 
-- A safety-critical question routes to `escalate` and the stream returns an `error` frame instead of
-  an answer. Deliberate, not a crash — but it dead-ends in the UI.
-- A follow-up is retrieved as a standalone question, so *"what about the rear ones?"* will not find
-  the pages its predecessor did.
+- An escalation record exists and the endpoints serve it, but nothing renders it yet.
+- A specification question on a subject the manual covers verbosely without stating the number can
+  score above `GATE_HIGH`, skip the grader, and answer from the manual. No threshold separates it;
+  see D19. `esc-06` and `fu-03` are that case in the eval.
+- `bj30-23` — the trailer weight sits in a table row the grader reads as not answering the question.
+  Neither table serialisation fixed it (D16).

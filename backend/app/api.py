@@ -123,18 +123,20 @@ def chat(body: Ask) -> StreamingResponse:
     if found is None:
         raise HTTPException(404, "No such session")
 
+    # Read before writing, so the turn being asked is not in its own history.
+    history = db.list_messages(body.session_id)
     db.add_message(body.session_id, "user", body.question)
     if found["title"] == "New conversation":
         db.rename_session(body.session_id, body.question)
 
     return StreamingResponse(
-        _run(body.session_id, found["manual_id"], body.question),
+        _run(body.session_id, found["manual_id"], body.question, history),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _run(session_id: str, manual: str, question: str) -> Iterator[str]:
+def _run(session_id: str, manual: str, question: str, history: list[dict]) -> Iterator[str]:
     """Drive the pipeline on a worker thread and forward its events as they happen.
 
     The pipeline is synchronous by design, so the queue — not async — is what makes a step
@@ -149,6 +151,7 @@ def _run(session_id: str, manual: str, question: str) -> Iterator[str]:
                 manual,
                 sink=lambda kind, data: events.put((kind, data)),
                 session_id=session_id,
+                history=history,
             )
             if ctx.escalation is not None:
                 db.add_message(
