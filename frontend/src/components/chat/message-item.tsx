@@ -11,6 +11,8 @@ import type { Message } from "@/types/chat";
 type Props = {
   message: Message;
   onPageClick?: (pagePdf: number) => void;
+  /** Whose seat the thread is being read from. The inbox reads it as the agent (D24). */
+  viewer?: "user" | "agent";
 };
 
 /** The badge is the visible half of the guard; the pills are the other half (D13). */
@@ -130,27 +132,32 @@ const markdownComponents: Components = {
   ),
 };
 
-export default function MessageItem({ message, onPageClick }: Props) {
+export default function MessageItem({ message, onPageClick, viewer = "user" }: Props) {
   const isUser = message.role === "user";
   // A human's turn, not the assistant's. Rendered differently on purpose: the user must never
   // have to guess whether they are talking to a person (D24).
   const isAgent = message.role === "agent";
+  // The same thread is read from two seats. Whoever is looking sits on the right, so an agent
+  // does not see their own replies in the customer's position.
+  const mine = message.role === viewer;
   const badge = message.source ? SOURCE_BADGE[message.source] : undefined;
+
+  const bubble = mine
+    ? isAgent
+      ? "rounded-br-md bg-emerald-600 text-white shadow-md"
+      : "rounded-br-md bg-blue-600 text-white shadow-md"
+    : isAgent
+      ? "rounded-bl-md border border-emerald-200 bg-emerald-50 shadow-sm"
+      : "rounded-bl-md border border-slate-200 bg-white shadow-sm";
 
   return (
     <div
-      className={`mb-5 flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+      className={`mb-5 flex w-full ${mine ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`max-w-[85%] rounded-3xl px-5 py-4 transition-all duration-200 ${
-          isUser
-            ? "rounded-br-md bg-blue-600 text-white shadow-md"
-            : isAgent
-              ? "rounded-bl-md border border-emerald-200 bg-emerald-50 shadow-sm"
-              : "rounded-bl-md border border-slate-200 bg-white shadow-sm"
-        }`}
+        className={`max-w-[85%] rounded-3xl px-5 py-4 transition-all duration-200 ${bubble}`}
       >
-        {isAgent && (
+        {isAgent && !mine && (
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
             <UserRound className="h-3 w-3" />
             Support agent
@@ -163,8 +170,14 @@ export default function MessageItem({ message, onPageClick }: Props) {
           </div>
         )}
 
-        {isUser ? (
-          <p className="whitespace-pre-wrap text-[15px] font-medium leading-7 text-white">
+        {/* Human-typed turns render verbatim. Markdown is for the assistant, which is asked
+            to produce it; a person's stray asterisk should not become italics. */}
+        {isUser || isAgent ? (
+          <p
+            className={`whitespace-pre-wrap text-[15px] font-medium leading-7 ${
+              mine ? "text-white" : "text-slate-800"
+            }`}
+          >
             {message.content}
           </p>
         ) : (

@@ -129,7 +129,7 @@ export default function EscalationPackageView({ pkg, loading }: Props) {
         </p>
         <div className="space-y-5">
           {transcript.map((stored) => (
-            <MessageItem key={stored.id} message={asMessage(stored)} />
+            <MessageItem key={stored.id} message={asMessage(stored)} viewer="agent" />
           ))}
         </div>
       </div>
