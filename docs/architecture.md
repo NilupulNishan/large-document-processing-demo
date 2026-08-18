@@ -7,12 +7,9 @@ Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
 indexing. Of the online half, `retrieve`, `rerank`, `gate`, `web_search` and `answer` are built, along
-with the SSE transport and the SQLite session store. The chat and PDF screens are built and drive
-those end to end from a browser. `resolve_query`, `escalate`, the `escalations` table and the operator
-inbox are not. Each is marked **(not built)** below.
-
-`escalate` is reachable — the gate routes safety-topic questions to it — but nothing implements it, so
-the API returns an `error` frame for those questions today.
+with the SSE transport, the SQLite session store and `escalate`. The chat and PDF screens are built
+and drive those end to end from a browser. `resolve_query` and the operator inbox are not. Each is
+marked **(not built)** below.
 
 ## Two halves
 
@@ -45,7 +42,7 @@ flowchart TB
         gate -->|weak, in scope| web["5 web_search"]
         gate -->|grounded| answer["6 answer"]
         web --> answer
-        gate -->|safety gap / exhausted| esc["7 escalate<br/>(not built)"]
+        gate -->|safety gap| esc["7 escalate"]
         answer --> esc
     end
 
@@ -58,8 +55,8 @@ flowchart TB
 ## Pipeline steps
 
 Each step is a class in `backend/app/pipeline/` with one `run(ctx)` method. `build_pipeline()`
-assembles them in order. Adding a capability means adding a step. Steps 2, 3, 4 and 6 are built;
-`build_pipeline()` currently returns those four.
+assembles them in order. Adding a capability means adding a step. Steps 2 through 7 are built;
+`build_pipeline()` returns those six.
 
 **1 · resolve_query — (not built)** — If the turn is a follow-up, rewrite it into a standalone question using the
 last ~6 user turns, then concatenate the rewrite with the raw question. If there is no history, pass
@@ -107,8 +104,8 @@ which Tavily treats as ordinary words. `search_depth` is `basic`: measured here,
 the content but also the latency, for two credits instead of one.
 
 A failure — missing key, dead network, zero results — leaves `ctx.web` empty and the answer falls
-through to general knowledge. D14 wants *manual weak and web weak* to escalate; until `escalate`
-exists this degrades rather than dead-ends.
+through to general knowledge. D14 wants *manual weak and web weak* to escalate; that trigger is
+**(not built)**, so this degrades rather than dead-ends.
 
 **6 · answer** — One structured, streamed call returning:
 
@@ -132,9 +129,13 @@ citation only for content web search supplied. The PDF pane responds to `page` c
 about a real vehicle is the most damaging failure this system can produce, and identical-looking
 pills are how that happens (D13).
 
-**7 · escalate — (not built)** — Deterministic. Triggers and streak mechanics in D14. Writes an
-`escalations` row and surfaces a reference number to the user. The gate already emits the `escalate`
-route; `AnswerStep` currently returns no answer for it.
+**7 · escalate** — Deterministic; the gate decides, this step records. Writes an `escalations` row
+and streams the user a confirmation carrying its reference. It sets `ctx.escalation` rather than
+`ctx.answer`: a handoff is not an answer, and `Source` stays `manual | manual+general | general` so
+the D13 distinction the UI renders keeps its meaning. The API emits an `escalated` event for it.
+
+Only D14's gate-rule trigger is reachable. **Asking for a person, the unresolved streak, and
+manual-weak-and-web-weak are (not built)** — all three need `resolve_query`.
 
 ## Transport
 
@@ -148,6 +149,9 @@ route; `AnswerStep` currently returns no answer for it.
 | `GET /sessions` | history panel |
 | `GET /sessions/{id}` | one conversation with its messages and citations |
 | `POST /chat` | `{session_id, question}` → the stream below |
+| `GET /escalations` | operator inbox; optional `?status=open` |
+| `GET /escalations/{id}` | the full handoff package, transcript included |
+| `PATCH /escalations/{id}` | `{status}` → open, picked_up or closed |
 
 ```
 event: step    {"step": "retrieve", "label": "Searching the manual"}
@@ -156,6 +160,9 @@ event: step    {"step": "web",      "label": "Not in the manual — checking the
 event: token   {"text": "..."}
 event: done    {"source": "manual", "citations": [...], "resolved": true}
 ```
+
+A handed-over question ends with `event: escalated {"id": "ESC-B40531", ...}` instead of `done`. It
+carries no `source` and no citations, because it is a handoff rather than an answer.
 
 Plus `event: error`, because a stream that dies silently is indistinguishable from one still thinking.
 
@@ -183,8 +190,9 @@ question anyone asks.
 
 ## Data model
 
-`data/app.db`, stdlib `sqlite3`, no ORM. `manuals`, `sessions` and `messages` are built;
-`escalations` is **(not built)**.
+`data/app.db`, stdlib `sqlite3`, no ORM. All four tables are built. `escalations` does not copy the
+transcript — that is the session's `messages`, joined when the package is read. `messages` carries a
+nullable `escalation_id` so a reopened conversation still shows the handoff as a handoff.
 
 ```
 manuals      id, title, filename, page_count, page_offset, ingested_at
@@ -192,11 +200,10 @@ manuals      id, title, filename, page_count, page_offset, ingested_at
 sessions     id, manual_id, title, created_at, updated_at
 
 messages     id, session_id, role, content, source, format,
-             citations_json, created_at
+             citations_json, created_at, escalation_id
 
-escalations  id, session_id, reference, issue_summary, steps_tried_json,
-             pages_shown_json, trigger_reason, suggested_next,
-             transcript_json, created_at
+escalations  id, session_id, manual_id, question, reason, pages_json,
+             status, created_at, updated_at
 ```
 
 `manual_id` sits on the session, not the message — a conversation is locked to one manual (D11).

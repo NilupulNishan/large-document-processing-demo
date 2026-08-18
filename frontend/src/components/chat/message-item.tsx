@@ -1,5 +1,6 @@
 "use client";
 
+import { UserRound } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -181,6 +182,24 @@ export default function MessageItem({ message, onPageClick }: Props) {
               {badge.label}
             </span>
             <SourceList citations={message.citations} onPageClick={onPageClick} />
+          </div>
+        )}
+
+        {/* No source badge and no citations: a handoff is not an answer (D12). */}
+        {!isUser && message.escalation && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+              <UserRound className="h-3 w-3" />
+              Passed to a specialist
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[11px] text-slate-600">
+              {message.escalation.id}
+            </span>
+            {message.escalation.reason && (
+              <span className="text-[11px] text-slate-500">
+                {message.escalation.reason}
+              </span>
+            )}
           </div>
         )}
       </div>

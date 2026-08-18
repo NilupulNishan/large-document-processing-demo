@@ -929,3 +929,132 @@ captured `sessionId: null` from the render before the session existed.
 - [ ] `escalate` still returns an `error` frame, so safety questions dead-end in the UI.
 - [ ] `manual+general` and `escalate` still have no labelled eval rows.
 - [ ] `resolve_query` unbuilt — follow-ups are retrieved as standalone questions.
+
+---
+
+## Slice 10 — the gate made trustworthy, and the handoff built
+
+### Outcome
+
+`escalate` writes a real record and shows the user its reference, so a safety question no longer
+dead-ends in an error frame. Getting there meant fixing the gate first: routing was non-deterministic,
+and the reranker could not read a third of the corpus.
+
+### Why the order
+
+The plan was escalation. The eval rows added for it exposed something worse — `esc-06`, "what is the
+wheel nut torque specification", scored **−2.07**, above `GATE_HIGH`, so no grader ran and it routed
+confidently to `manual`. Neither manual contains a fastener torque anywhere. Building the handoff
+would not have helped: the question never reaches the branch. A confidently wrong answer to a
+plausible safety question does more damage in a demo than a missing feature.
+
+### The reranker was reading 512 tokens of everything
+
+`RERANK_MAX_TOKENS` is the model's window; chunks are sized for the embedder's 8,191. Measured: **11%
+of BJ30's tokens and 22% of X55's were unreachable**, and the chunk holding the towing capacity was
+read to 22% — the answer at character 5,196, the cut at 2,082. It was scoring that chunk on engine
+cylinder arrangement.
+
+Fixed by scoring every window and keeping the best. A chunk that fits produces one window and scores
+exactly as before, so only the 6–9% that overflow change. `spec` Recall@5 and @10 went 86% → 100%.
+
+### Markdown tables: built, measured, reverted
+
+Docling's default writes one sentence per cell, repeating the row label in each. Windowing put the
+towing chunk back in the top 5 and the grader still said it does not answer the question — it does,
+the answer is `1.5`. Markdown looked like the fix, and was not:
+
+| | markdown | triplet |
+|---|---|---|
+| `spec` Recall@1 / MRR | 71% / 0.821 | **86% / 0.893** |
+| `procedure` Recall@1 / MRR | **86% / 0.906** | 82% / 0.883 |
+| `bj30-02` engine oil | `manual+general` | **`manual`** |
+| `bj30-23` trailer weight | `escalate` | `escalate` |
+
+It trades one kind of accuracy for another and does not fix what it was built for. Reverted, with the
+reasoning in D16 so it is not retried blindly.
+
+**One defect found on the way is worth carrying forward.** Docling pads markdown rule rows to the
+column width, so a wide table's `|---|` line ran to 633 characters. The tokeniser splits each dash
+separately, so the rule row alone exceeded the whole 512-token window and no data row was ever read.
+That made the first markdown attempt score *worse* than the default, which nearly buried the real
+result under a formatting artefact.
+
+### The gate disagreed with itself
+
+Both model calls ran at the API default temperature of 1.0. Over five identical runs of every question
+reaching the grader, **4 of 15 changed route** — same question, same passages, same index. D2 says
+routing is deterministic; that holds only if the evidence is stable, and an eval harness over a
+component that disagrees with itself is not a test suite.
+
+Temperature 0 took it to 2/15. The rest was ambiguity in the fields:
+
+- `question_is_about_the_domain` was read as *"do the passages cover it"*, so "how much does this car
+  cost new" was judged off-domain and **declined**.
+- `question_touches_a_safety_topic` fired on "where is my nearest service centre".
+
+**The first prompt fix made things worse and is recorded rather than quietly replaced.** Wording it as
+"a commercial or administrative question is not a safety topic" fixed two general questions and broke
+three escalations — the model read any practical question as administrative. On a safety route a
+missed escalation is worse than a spurious one, so it was rejected and rewritten around the
+distinction the rows actually show: a **procedure, limit or specification** on a listed topic is a
+safety topic; what something costs, where to get it, or who to contact is not.
+
+Result: route instability **4/15 → 0/15**, misroutes across 52 rows **6 → 2**.
+
+### The same PDF ingested to a different index each run
+
+Found while verifying the revert. `merge.py` sorted a set of headings by frequency with no tiebreak,
+so ties resolved on set iteration order, which varies with string hash randomisation. `index.py`
+prepends `heading_path` into the embedded text — so re-ingesting the same PDF produced different
+vectors. 90 of 213 chunks differed between two runs of identical code. One-line fix; verified by
+ingesting twice and comparing checksums.
+
+### Escalation
+
+`EscalateStep` sets `ctx.escalation`, not `ctx.answer`. A handoff is not an answer, and forcing it
+into the `Answer` model would mean a fourth `Source` value, blurring the manual/general distinction
+the UI renders — the one D13 exists to protect. The API emits `escalated` instead of `done`.
+
+`escalations` does not copy the transcript; it is the session's `messages`, joined when the package is
+read. `messages` gains a nullable `escalation_id` so a reopened conversation still renders the handoff
+as a handoff.
+
+Only D14's gate-rule trigger is reachable. The other three all need `resolve_query`, and are marked
+`(not built)` rather than approximated.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync python playground/check_truncation.py
+uv run --project backend --locked --no-sync python playground/check_grader_stability.py
+uv run --project backend --locked --no-sync python scripts/ingest.py data/manuals/<file>.pdf
+uv run --project backend --locked --no-sync python scripts/index.py data/chunks/<file>.jsonl --title "..."
+```
+
+Conversion is the expensive half, so `parse()` now caches the converted document under `data/parsed/`.
+Re-chunking went **11.3 min → 6 s**, which is what made it affordable to try the table change and
+reject it on evidence rather than argument. `--reparse` forces the models to run again.
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Overall Recall@1 / MRR | 85% / 0.902 | 85% / 0.902 |
+| Recall@10 | 97% | **100%** |
+| `spec` Recall@5 / @10 | 86% / 86% | **100% / 100%** |
+| Route instability | 4/15 | **0/15** |
+| Misroutes (52 rows) | 6 | **2** |
+| Re-chunk a manual | 11.3 min | **6 s** |
+
+### Checkpoint
+
+- [x] The reranker can read every chunk it scores.
+- [x] The same question routes the same way twice.
+- [x] The same PDF ingests to the same index.
+- [x] A safety question produces a handoff with a reference, not an error frame.
+- [x] The handoff package carries the transcript, pages already shown and the trigger reason.
+- [ ] `bj30-23` still misroutes to `escalate` — the trailer weight is in a table the grader reads as
+      not answering the question. Neither table format fixed it.
+- [ ] `esc-06` scores −2.07 and never reaches the grader. `GATE_HIGH` was calibrated on positives only.
+- [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.

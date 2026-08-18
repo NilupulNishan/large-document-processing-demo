@@ -38,6 +38,8 @@ class PipelineContext(BaseModel):
 
     question: str
     manual: str
+    # None for eval and playground runs, which have no conversation to hand over.
+    session_id: str | None = None
 
     query: str = ""
     candidates: list[dict] = []
@@ -47,6 +49,8 @@ class PipelineContext(BaseModel):
 
     route: Route | None = None
     answer: Answer | None = None
+    # Set instead of `answer` on the escalate route: a handoff is not an answer (D12).
+    escalation: dict | None = None
 
     # What actually ran, for the SSE step events. No step may append without running (D9).
     events: list[tuple[str, str]] = []
@@ -79,8 +83,9 @@ class Pipeline:
         question: str,
         manual: str,
         sink: Callable[[str, dict], None] | None = None,
+        session_id: str | None = None,
     ) -> PipelineContext:
-        ctx = PipelineContext(question=question, manual=manual, sink=sink)
+        ctx = PipelineContext(question=question, manual=manual, sink=sink, session_id=session_id)
         for index, step in enumerate(self.steps, start=1):
             logger.info("[%d/%d] %s", index, len(self.steps), step.name)
             ctx = step.run(ctx)

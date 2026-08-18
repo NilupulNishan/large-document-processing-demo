@@ -37,7 +37,25 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id, created_at);
+
+-- The handoff package (D12). The transcript is not copied here; it is the session's messages.
+CREATE TABLE IF NOT EXISTS escalations (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    manual_id  TEXT NOT NULL,
+    question   TEXT NOT NULL,
+    reason     TEXT NOT NULL,
+    pages_json TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS escalations_status ON escalations(status, created_at);
 """
+
+# Added after messages existed, so it cannot live in _SCHEMA's CREATE IF NOT EXISTS.
+_MIGRATIONS = ("ALTER TABLE messages ADD COLUMN escalation_id TEXT",)
 
 
 def connect() -> sqlite3.Connection:
@@ -46,6 +64,11 @@ def connect() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(_SCHEMA)
+    for statement in _MIGRATIONS:
+        try:
+            connection.execute(statement)
+        except sqlite3.OperationalError:
+            pass  # already applied
     return connection
 
 
@@ -124,6 +147,7 @@ def add_message(
     source: str | None = None,
     format: str | None = None,
     citations: list | None = None,
+    escalation_id: str | None = None,
 ) -> dict:
     message = {
         "id": uuid.uuid4().hex[:12],
@@ -134,11 +158,13 @@ def add_message(
         "format": format,
         "citations_json": json.dumps(citations) if citations is not None else None,
         "created_at": _now(),
+        "escalation_id": escalation_id,
     }
     with connect() as db:
         db.execute(
-            "INSERT INTO messages VALUES (:id,:session_id,:role,:content,:source,:format,"
-            ":citations_json,:created_at)",
+            "INSERT INTO messages (id,session_id,role,content,source,format,citations_json,"
+            "created_at,escalation_id) VALUES (:id,:session_id,:role,:content,:source,:format,"
+            ":citations_json,:created_at,:escalation_id)",
             message,
         )
         db.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (_now(), session_id))
@@ -146,10 +172,72 @@ def add_message(
 
 
 def list_messages(session_id: str) -> list[dict]:
+    """Escalation reason joined in, so a reopened conversation renders the handoff in full."""
     with connect() as db:
         rows = db.execute(
-            "SELECT * FROM messages WHERE session_id = ? ORDER BY created_at, rowid", (session_id,)
+            "SELECT m.*, e.reason AS escalation_reason FROM messages m"
+            " LEFT JOIN escalations e ON e.id = m.escalation_id"
+            " WHERE m.session_id = ? ORDER BY m.created_at, m.rowid",
+            (session_id,),
         )
         return [
             {**dict(r), "citations": json.loads(r["citations_json"] or "[]")} for r in rows
         ]
+
+
+# --- escalations ---------------------------------------------------------------
+
+def create_escalation(
+    session_id: str, manual_id: str, question: str, reason: str, pages: list[int]
+) -> dict:
+    """The reference is what the user is shown, so it is short and readable (D12)."""
+    row = {
+        "id": f"ESC-{uuid.uuid4().hex[:6].upper()}",
+        "session_id": session_id,
+        "manual_id": manual_id,
+        "question": question,
+        "reason": reason,
+        "pages_json": json.dumps(pages),
+        "status": "open",
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+    with connect() as db:
+        db.execute(
+            "INSERT INTO escalations VALUES (:id,:session_id,:manual_id,:question,:reason,"
+            ":pages_json,:status,:created_at,:updated_at)",
+            row,
+        )
+    return {**row, "pages": pages}
+
+
+def list_escalations(status: str | None = None) -> list[dict]:
+    query = "SELECT * FROM escalations"
+    parameters: tuple = ()
+    if status:
+        query += " WHERE status = ?"
+        parameters = (status,)
+    with connect() as db:
+        rows = db.execute(query + " ORDER BY created_at DESC", parameters)
+        return [{**dict(r), "pages": json.loads(r["pages_json"])} for r in rows]
+
+
+def get_escalation(id: str) -> dict | None:
+    """The full handoff package: the record, its session, and the whole transcript (D14)."""
+    with connect() as db:
+        row = db.execute("SELECT * FROM escalations WHERE id = ?", (id,)).fetchone()
+    if row is None:
+        return None
+    return {
+        **dict(row),
+        "pages": json.loads(row["pages_json"]),
+        "session": get_session(row["session_id"]),
+        "transcript": list_messages(row["session_id"]),
+    }
+
+
+def set_escalation_status(id: str, status: str) -> None:
+    with connect() as db:
+        db.execute(
+            "UPDATE escalations SET status = ?, updated_at = ? WHERE id = ?", (status, _now(), id)
+        )

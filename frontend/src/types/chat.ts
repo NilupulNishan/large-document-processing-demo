@@ -33,6 +33,15 @@ export type SessionSummary = {
   updated_at: string;
 };
 
+/** A handed-over question. Carries no source and no citations: it is not an answer (D12). */
+export type Escalation = {
+  id: string;
+  reason: string;
+  pages: number[];
+  status?: "open" | "picked_up" | "closed";
+  created_at?: string;
+};
+
 /** One SSE frame. `step` labels describe work that actually ran (D9). */
 export type StreamEvent =
   | { event: "step"; data: { step: string; label: string } }
@@ -47,6 +56,7 @@ export type StreamEvent =
         resolved: boolean;
       };
     }
+  | { event: "escalated"; data: Escalation & { message: string } }
   | { event: "error"; data: { message: string } };
 
 export type Message = {
@@ -59,4 +69,6 @@ export type Message = {
   steps: string[];
   streaming?: boolean;
   failed?: boolean;
+  /** Set instead of `source` when the question was handed to a person. */
+  escalation?: Escalation;
 };

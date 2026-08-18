@@ -30,6 +30,8 @@ export type StoredMessage = {
   content: string;
   source: string | null;
   citations: Citation[];
+  escalation_id: string | null;
+  escalation_reason: string | null;
 };
 
 export const loadSession = (id: string) =>

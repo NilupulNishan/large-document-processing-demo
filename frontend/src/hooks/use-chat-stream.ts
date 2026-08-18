@@ -37,6 +37,13 @@ export function useChatStream(sessionId: string | null) {
             source: (stored.source as Source) ?? undefined,
             citations: stored.citations ?? [],
             steps: [],
+            escalation: stored.escalation_id
+              ? {
+                  id: stored.escalation_id,
+                  reason: stored.escalation_reason ?? "",
+                  pages: [],
+                }
+              : undefined,
           })),
         );
       })
@@ -90,7 +97,15 @@ export function useChatStream(sessionId: string | null) {
               citations: (citations ?? []) as Citation[],
               streaming: false,
             }));
-          } else {
+          } else if (frame.event === "escalated") {
+            const { message: text, ...escalation } = frame.data;
+            patchLast((message) => ({
+              ...message,
+              content: message.content || text,
+              escalation,
+              streaming: false,
+            }));
+          } else if (frame.event === "error") {
             const { message: text } = frame.data;
             patchLast((message) => ({
               ...message,
@@ -99,6 +114,8 @@ export function useChatStream(sessionId: string | null) {
               failed: true,
             }));
           }
+          // An unknown event is ignored, not treated as a failure. Matching `error` by
+          // elimination is how `escalated` first rendered as a crash.
         }
       } catch {
         patchLast((message) => ({

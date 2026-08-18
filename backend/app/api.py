@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +53,10 @@ class Ask(BaseModel):
     question: str
 
 
+class EscalationStatus(BaseModel):
+    status: Literal["open", "picked_up", "closed"]
+
+
 @app.get("/manuals")
 def manuals() -> list[dict]:
     return db.list_manuals()
@@ -86,6 +91,28 @@ def session(session_id: str) -> dict:
     return {**found, "messages": db.list_messages(session_id)}
 
 
+@app.get("/escalations")
+def escalations(status: str | None = None) -> list[dict]:
+    return db.list_escalations(status)
+
+
+@app.get("/escalations/{escalation_id}")
+def escalation(escalation_id: str) -> dict:
+    """The whole handoff package, so nobody has to ask the user to start again (D14)."""
+    found = db.get_escalation(escalation_id)
+    if found is None:
+        raise HTTPException(404, "No such escalation")
+    return found
+
+
+@app.patch("/escalations/{escalation_id}")
+def update_escalation(escalation_id: str, body: EscalationStatus) -> dict:
+    if db.get_escalation(escalation_id) is None:
+        raise HTTPException(404, "No such escalation")
+    db.set_escalation_status(escalation_id, body.status)
+    return db.get_escalation(escalation_id)
+
+
 def _frame(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -117,10 +144,22 @@ def _run(session_id: str, manual: str, question: str) -> Iterator[str]:
 
     def work() -> None:
         try:
-            ctx = _pipeline.run(question, manual, sink=lambda kind, data: events.put((kind, data)))
-            if ctx.answer is None:
-                # Only `escalate` reaches here, and it is not built yet (D12).
-                events.put(("error", {"message": "This needs a person, and handoff is not built."}))
+            ctx = _pipeline.run(
+                question,
+                manual,
+                sink=lambda kind, data: events.put((kind, data)),
+                session_id=session_id,
+            )
+            if ctx.escalation is not None:
+                db.add_message(
+                    session_id,
+                    "assistant",
+                    ctx.escalation["message"],
+                    escalation_id=ctx.escalation["id"],
+                )
+                events.put(("escalated", ctx.escalation))
+            elif ctx.answer is None:
+                events.put(("error", {"message": "The pipeline produced no answer."}))
             else:
                 answer = ctx.answer
                 db.add_message(
