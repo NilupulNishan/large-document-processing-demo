@@ -1286,3 +1286,98 @@ uv run --project backend --locked --no-sync python playground/check_verdict.py
 - [ ] D14's `unresolved_streak`: no column, no triggers. Two of them are now unblocked.
 - [ ] D4's context sentence — the fix for `x55-08`, and the precondition for closing the bypass.
 - [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.
+
+---
+
+## Slice 13 — the escalation counter, and three of D14's four triggers
+
+### Outcome
+
+`unresolved_streak` exists as a column, a pure function and one config value. Asking for a person and
+the unresolved streak both escalate, and the handoff now records *which* rule fired instead of a
+constant. Routing accuracy **92% (54/59)** over a set that gained two rows for the new triggers.
+
+### It cost no extra model call, as D14 said it would
+
+`resolve_query` was already calling the model on every follow-up. The two observations D14 needs ride
+on that call: `asks_for_a_person`, and `progress` as one of `reports_failure`, `confirms_success`,
+`new_topic`, `unclear`. `next_streak()` turns the second into a count. Neither the model nor the
+prompt knows the threshold, the current count, or what escalation is.
+
+### The check was in the wrong place, and one row proved it
+
+The streak check first sat *below* the score band, on the reasoning that a manual answering this turn
+means something did resolve it. Then `esc-09` — "it is still not working", arriving with a streak of
+2 — scored **+3.78** and answered from the manual.
+
+That reasoning was wrong. A streak only reaches the threshold through turns the user reported as
+failures, or answers that were not grounded in their manual. A confident score on the next turn is the
+fourth attempt at what has already failed three times, and a cross-encoder matching "not working"
+against some passage is not evidence otherwise. Both new triggers now run before the band. Recorded in
+D21 rather than quietly moved.
+
+Two resets matter as much as the trigger. The handoff sets the count to zero — left at 3, every later
+turn in the session escalates and the user never gets another answer. And confirming something worked,
+or changing subject, resets it, so a solved problem does not carry a debt into the next question.
+
+### Verified end to end
+
+| in | turn | route | streak out |
+|---|---|---|---|
+| 0 | "can I speak to a person about this?" | `escalate` — *The user asked to speak to a person* | 0 |
+| 2 | "it is still not working" | `escalate` — *Nothing resolved it across 3 turns* | 0 |
+| 1 | "it is still not working" | `manual` | 2 |
+| 2 | "great that fixed it, thanks" | `manual` | 0 |
+
+### The grader's instability is now the largest source of misroutes
+
+Three consecutive full eval runs produced three different misroute sets among rows whose code path
+never changed — `bj30-16`, then `bj30-02`, then `esc-03`. Measured over 5 identical runs of every row
+a grader decides: **2 of 16 changed route** — `bj30-02` on `passages_answer_the_question`, `esc-03` on
+`question_touches_a_safety_topic`, which decides `escalate` against `general`. A third row, `dec-02`,
+flips the safety-topic field on some runs without its route moving, so the field-level instability is
+wider than the route count shows.
+
+Slice 10 recorded instability at 0/15 and that number has been quoted since. It was true of the rows
+sampled then and is not true of the set now. **Any single routing number in this log should be read as
+±2 rows.**
+
+`check_grader_stability.py` was itself measuring the wrong thing once follow-ups existed — it graded
+the raw question, so `fu-01` looked like a stable `general` when the pipeline routes it `manual`. Run
+in that state it reported **3 of 20**, and that figure was written into this log before the script was
+corrected. It now mirrors `ResolveQueryStep` and skips rows a D14 trigger decides before the grader is
+consulted: 16 rows reach the grader, not 20, because the resolved follow-ups score above `GATE_HIGH`
+and never get there. The corrected figure is 2 of 16.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+uv run --project backend --locked --no-sync python playground/check_grader_stability.py
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| D14 triggers reachable | 1 of 4 | **3 of 4** |
+| Escalation reason | one hardcoded constant | the rule that fired |
+| Routing accuracy | 93% (53/57) | 92% (54/59) |
+| Grader route instability | "0/15" (Slice 10) | **2/16, measured** |
+| Extra model calls added | — | **none** |
+
+### Checkpoint
+
+- [x] `unresolved_streak` persists on the session and survives a reopened conversation.
+- [x] Asking for a person hands off, without the manual being consulted first.
+- [x] Three unresolved turns hand off, checked before the score band.
+- [x] The handoff resets the counter; so do success and a change of subject.
+- [x] The operator reads which rule fired, not a constant.
+- [x] Both triggers are asserted by the harness, not only by a playground script.
+- [ ] 2 of 16 graded rows change route across identical runs, on two different grader fields. This
+      is now the biggest single source of misroutes and nothing in this slice addressed it.
+- [ ] Manual-weak-and-web-weak — D14's fourth trigger, still `(not built)`.
+- [ ] `esc-06` and `fu-03` — the `GATE_HIGH` bypass (D19), unchanged.
+- [ ] `bj30-23` — table serialisation (D16), unchanged.
+- [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.

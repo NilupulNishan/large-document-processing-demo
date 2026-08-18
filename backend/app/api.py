@@ -130,13 +130,21 @@ def chat(body: Ask) -> StreamingResponse:
         db.rename_session(body.session_id, body.question)
 
     return StreamingResponse(
-        _run(body.session_id, found["manual_id"], body.question, history),
+        _run(
+            body.session_id,
+            found["manual_id"],
+            body.question,
+            history,
+            found.get("unresolved_streak", 0),
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _run(session_id: str, manual: str, question: str, history: list[dict]) -> Iterator[str]:
+def _run(
+    session_id: str, manual: str, question: str, history: list[dict], streak: int
+) -> Iterator[str]:
     """Drive the pipeline on a worker thread and forward its events as they happen.
 
     The pipeline is synchronous by design, so the queue — not async — is what makes a step
@@ -152,7 +160,11 @@ def _run(session_id: str, manual: str, question: str, history: list[dict]) -> It
                 sink=lambda kind, data: events.put((kind, data)),
                 session_id=session_id,
                 history=history,
+                unresolved_streak=streak,
             )
+            # Persisted here, not in a step: the pipeline counts, the boundary stores (D14).
+            if ctx.unresolved_streak != streak:
+                db.set_unresolved_streak(session_id, ctx.unresolved_streak)
             if ctx.escalation is not None:
                 db.add_message(
                     session_id,

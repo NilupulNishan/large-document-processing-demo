@@ -45,6 +45,10 @@ RERANK_WINDOW_OVERLAP = 128
 GATE_HIGH = -4.1
 GATE_LOW = -7.5
 
+# Turns in a row that resolved nothing before the question goes to a person (D14). A starting
+# value, not a finding — it is one number precisely so it can be tuned without touching code.
+UNRESOLVED_ESCALATE = 3
+
 # Merge targets. Rationale and measurements in docs/build-log.md, Slice 2.
 TARGET_CHUNK_TOKENS = 450
 MAX_PAGE_SPAN = 3

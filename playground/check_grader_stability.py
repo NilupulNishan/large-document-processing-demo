@@ -13,8 +13,14 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
-from app.config import GATE_HIGH, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
+from app.config import (  # noqa: E402
+    GATE_HIGH,
+    RERANK_CANDIDATES,
+    RERANK_KEEP,
+    UNRESOLVED_ESCALATE,
+)
 from app.pipeline.gate import decide, grade  # noqa: E402
+from app.pipeline.resolve import next_streak, read  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
 from app.providers.reranker import rank  # noqa: E402
@@ -30,26 +36,35 @@ def main() -> None:
     # Only rows the grader actually decides: at or below the band, no shortcut.
     graded = []
     for row in rows:
-        hits = search(
-            row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
-        )
-        scored = rank(row["question"], [h["text"] for h in hits])
+        # Mirrors ResolveQueryStep, or the history rows are measured on a question the
+        # pipeline never sends.
+        query, asks_for_person = row["question"], False
+        streak = row.get("streak", 0)
+        if row.get("history"):
+            turn = read(row["question"], row["history"])
+            query = f"{turn.standalone_question} {row['question']}"
+            asks_for_person = turn.asks_for_a_person
+            streak = next_streak(streak, turn.progress)
+
+        hits = search(row["manual"], query, embed_query(query), limit=RERANK_CANDIDATES)
+        scored = rank(query, [h["text"] for h in hits])
         ordered = [
             h | {"excerpt": excerpt}
             for (_, excerpt), h in sorted(zip(scored, hits, strict=True), key=lambda p: -p[0][0])
         ]
         top = max(value for value, _ in scored)
-        if top <= GATE_HIGH:
-            graded.append((row, ordered[:RERANK_KEEP], top))
+        # Only rows a grader actually decides: no shortcut, and no D14 trigger ahead of it.
+        if top <= GATE_HIGH and not asks_for_person and streak < UNRESOLVED_ESCALATE:
+            graded.append((row, query, ordered[:RERANK_KEEP], top))
 
     print(f"{len(graded)} rows reach the grader; {RUNS} runs each\n")
     print(f"{'id':10} {'routes seen':38} {'stable':7} {'expected'}")
 
     flipping = 0
-    for row, passages, top in graded:
+    for row, query, passages, top in graded:
         routes, flips = [], Counter()
         for _ in range(RUNS):
-            verdict = grade(row["question"], passages)
+            verdict = grade(query, passages)
             routes.append(decide(top, verdict))
             for field in FIELDS:
                 flips[field] += getattr(verdict, field)

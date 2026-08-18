@@ -9,7 +9,7 @@ Status: the offline half is built — parse, normalise, merge, page-offset detec
 indexing. The online half is built end to end — `resolve_query`, `retrieve`, `rerank`, `gate`,
 `web_search`, `answer` and `escalate` — along with the SSE transport and the SQLite session store.
 The chat and PDF screens drive those from a browser. The operator inbox is not built, nor is D14's
-`unresolved_streak` counter. Each is marked **(not built)** below.
+fourth escalation trigger. Each is marked **(not built)** below.
 
 ## Two halves
 
@@ -65,8 +65,9 @@ rewrite must name the task it concerns; "what should I do next" without naming w
 retrieves nothing, which is how it first failed (D20). Everything downstream reads `ctx.query`, so
 retrieval, the grader and the answer all see the resolved question.
 
-The classification of whether the user is reporting that a previous suggestion failed, which would
-drive `unresolved_streak` (D14), is **(not built)**.
+The same call reports two things for D14 without costing another: whether the user asked for a
+person, and whether the turn reports a failure, confirms success or changes subject. It observes;
+`next_streak()` counts and `decide()` routes.
 
 **2 · retrieve** — Hybrid search in LanceDB scoped to the session's manual: BM25 full-text and dense
 vector in parallel, fused with Reciprocal Rank Fusion at k=60. Returns 12 candidates carrying page
@@ -92,6 +93,8 @@ it the grader runs once and reports three observations; `decide()` turns those i
 
 | Grader says | Score | Route | Answer source |
 |---|---|---|---|
+| — (user asked for a person) | any | escalate — D14, checked first | — |
+| — (`unresolved_streak` >= 3) | any | escalate — D14 | — |
 | — (not called) | above HIGH | answer from manual | `manual` |
 | not about the domain | any | decline | — |
 | passages answer it | above LOW | answer from manual | `manual` |
@@ -144,10 +147,20 @@ and streams the user a confirmation carrying its reference. It sets `ctx.escalat
 `ctx.answer`: a handoff is not an answer, and `Source` stays `manual | manual+general | general` so
 the D13 distinction the UI renders keeps its meaning. The API emits an `escalated` event for it.
 
-Only D14's gate-rule trigger is reachable. **Asking for a person, the unresolved streak, and
-manual-weak-and-web-weak are (not built).** The first two are now unblocked — `resolve_query` exists
-and D14 notes the classification rides on its call — but neither the `unresolved_streak` column nor
-the triggers are written.
+Three of D14's four triggers are built: the gate rule, asking for a person, and the unresolved
+streak. **Manual-weak-and-web-weak is (not built).**
+
+`unresolved_streak` is an integer column on `sessions`. `resolve_query` reports two observations on
+the call it was already making — whether the user asked for a person, and whether the turn reports a
+failure, confirms success or changes subject — and `next_streak()` turns the second into a count.
+`decide()` reads the count; no model sees it. The API carries the value in and writes it back, the
+same boundary that supplies `history`; steps only add to it.
+
+Both new triggers are checked **before** the score band, unlike the gate rule. A streak only reaches
+the threshold through turns the user reported as failures or answers that were not grounded, so a
+confident score on the next turn is the fourth attempt at what has already failed three times. The
+handoff then resets the counter, or every later turn in the session would escalate again.
+`escalation_trigger` records which rule fired, so the operator reads a reason rather than a constant.
 
 ## Transport
 
@@ -278,15 +291,16 @@ are solid and drive the pane, web pills are dashed and open a tab. Repeated page
  "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 57 rows cover four of the
-five: `manual` 43, `escalate` 8, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
+`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 59 rows cover four of the
+five: `manual` 43, `escalate` 10, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
 that path is unmeasured.** `kind` is `procedure` 23, `safety` 13, `spec` 10, `symptom` 5, `absent` 4,
-`offtopic` 2, so weakness can be located rather than just observed. Pages are labelled from the source
-text, never from retrieval output.
+`handoff` 2, `offtopic` 2, so weakness can be located rather than just observed. Pages are labelled
+from the source text, never from retrieval output.
 
-Four rows carry an optional `history` array of earlier turns. The harness rewrites those through
-`resolve()` before searching, exactly as the pipeline does, so follow-up behaviour is measured rather
-than assumed. A row without `history` is untouched by that path.
+Six rows carry an optional `history` array of earlier turns, and one an optional `streak`. The harness
+puts those through `read()` and `next_streak()` before searching, the same calls `ResolveQueryStep`
+makes, so follow-up and escalation-counter behaviour are measured rather than assumed. A row with
+neither field is untouched by that path.
 
 `eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind, scoring fusion order
 against reranked order over the same candidates. It then reports **routing accuracy** for the gate

@@ -5,7 +5,13 @@ destination (D2). Bands and their derivation: docs/build-log.md, Slice 5.
 
 from pydantic import BaseModel
 
-from app.config import DOMAIN_DESCRIPTION, GATE_HIGH, GATE_LOW, SAFETY_TOPICS
+from app.config import (
+    DOMAIN_DESCRIPTION,
+    GATE_HIGH,
+    GATE_LOW,
+    SAFETY_TOPICS,
+    UNRESOLVED_ESCALATE,
+)
 from app.pipeline.base import PipelineContext, Route
 from app.providers.azure_openai import complete
 
@@ -18,8 +24,22 @@ class Verdict(BaseModel):
     question_touches_a_safety_topic: bool
 
 
-def decide(top_score: float, verdict: Verdict | None) -> Route:
+def decide(
+    top_score: float,
+    verdict: Verdict | None,
+    streak: int = 0,
+    asks_for_person: bool = False,
+) -> Route:
     """Pure. Above HIGH the manual answers; below LOW it does not; between, ask."""
+    # Asking for a human is a request to honour, not one to talk someone out of (D14).
+    if asks_for_person:
+        return "escalate"
+    # Three turns that resolved nothing is a handoff, not a fourth attempt. Checked before the
+    # band, not after: the streak only reaches this by the user reporting failure or by answers
+    # that were not grounded, so a confident score here is the fourth try at what already failed.
+    if streak >= UNRESOLVED_ESCALATE:
+        return "escalate"
+
     if top_score > GATE_HIGH:
         return "manual"
 
@@ -58,6 +78,15 @@ def grade(question: str, passages: list[dict]) -> Verdict:
     )
 
 
+# The operator needs to know which rule fired, not just that one did (D12).
+def _trigger(ctx: PipelineContext, verdict: Verdict | None) -> str:
+    if ctx.asks_for_person:
+        return "The user asked to speak to a person"
+    if ctx.unresolved_streak >= UNRESOLVED_ESCALATE:
+        return f"Nothing resolved it across {ctx.unresolved_streak} turns"
+    return "Safety-critical topic the manual does not cover"
+
+
 class GateStep:
     name = "gate"
 
@@ -67,5 +96,7 @@ class GateStep:
         if verdict is not None:
             ctx.emit(self.name, "Checked whether the manual covers this")
 
-        ctx.route = decide(ctx.top_score, verdict)
+        ctx.route = decide(ctx.top_score, verdict, ctx.unresolved_streak, ctx.asks_for_person)
+        if ctx.route == "escalate":
+            ctx.escalation_trigger = _trigger(ctx, verdict)
         return ctx

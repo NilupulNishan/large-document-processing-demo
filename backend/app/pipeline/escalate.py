@@ -6,8 +6,8 @@ anywhere (D12). The trigger is the gate's, so no model decides that a question e
 from app import db
 from app.pipeline.base import PipelineContext
 
-# Only the gate rule from D14 is reachable. The other three triggers — asking for a person, an
-# unresolved streak, and manual-weak-and-web-weak — all need resolve_query, which is not built.
+# Three of D14's four triggers are reachable; the gate names which one fired. Manual-weak-and-
+# web-weak is (not built). This is the fallback when a caller reached the step without one.
 _REASON = "Safety-critical topic the manual does not cover"
 
 _CONFIRMATION = (
@@ -27,15 +27,18 @@ class EscalateStep:
         # Pages the user was already shown, so nobody sends them back to the same place.
         pages = sorted({page for passage in ctx.passages for page in passage["pages_pdf"]})
 
+        reason = ctx.escalation_trigger or _REASON
         if ctx.session_id:
             record = db.create_escalation(
-                ctx.session_id, ctx.manual, ctx.question, _REASON, pages
+                ctx.session_id, ctx.manual, ctx.question, reason, pages
             )
         else:
-            record = {"id": "ESC-PREVIEW", "reason": _REASON, "pages": pages}
+            record = {"id": "ESC-PREVIEW", "reason": reason, "pages": pages}
 
         text = _CONFIRMATION.format(id=record["id"])
         ctx.token(text)
         ctx.escalation = {**record, "message": text}
+        # A person has it now. Left standing, the counter would escalate every later turn.
+        ctx.unresolved_streak = 0
         ctx.emit(self.name, f"Handed to a specialist — {record['id']}")
         return ctx

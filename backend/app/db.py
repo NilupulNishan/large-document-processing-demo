@@ -55,7 +55,10 @@ CREATE INDEX IF NOT EXISTS escalations_status ON escalations(status, created_at)
 """
 
 # Added after messages existed, so it cannot live in _SCHEMA's CREATE IF NOT EXISTS.
-_MIGRATIONS = ("ALTER TABLE messages ADD COLUMN escalation_id TEXT",)
+_MIGRATIONS = (
+    "ALTER TABLE messages ADD COLUMN escalation_id TEXT",
+    "ALTER TABLE sessions ADD COLUMN unresolved_streak INTEGER NOT NULL DEFAULT 0",
+)
 
 
 def connect() -> sqlite3.Connection:
@@ -111,8 +114,11 @@ def create_session(manual_id: str, title: str) -> dict:
         "updated_at": _now(),
     }
     with connect() as db:
-        db.execute("INSERT INTO sessions VALUES (:id,:manual_id,:title,:created_at,:updated_at)",
-                   session)
+        db.execute(
+            "INSERT INTO sessions (id,manual_id,title,created_at,updated_at)"
+            " VALUES (:id,:manual_id,:title,:created_at,:updated_at)",
+            session,
+        )
     return session
 
 
@@ -130,6 +136,12 @@ def list_sessions() -> list[dict]:
 def rename_session(id: str, title: str) -> None:
     with connect() as db:
         db.execute("UPDATE sessions SET title = ? WHERE id = ?", (title[:80], id))
+
+
+def set_unresolved_streak(id: str, streak: int) -> None:
+    """How many turns in a row have failed to resolve the user's problem (D14)."""
+    with connect() as db:
+        db.execute("UPDATE sessions SET unresolved_streak = ? WHERE id = ?", (streak, id))
 
 
 def get_session(id: str) -> dict | None:

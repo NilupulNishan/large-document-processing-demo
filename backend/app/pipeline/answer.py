@@ -161,5 +161,8 @@ class AnswerStep:
             citations=_citations(draft, items, kind),
             resolved=draft.resolved,
         )
+        # Answered, but not from their manual — that is a turn that resolved nothing (D14).
+        if ctx.answer.source != "manual":
+            ctx.unresolved_streak += 1
         ctx.emit(self.name, "Wrote the answer")
         return ctx

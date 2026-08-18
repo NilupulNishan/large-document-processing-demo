@@ -42,6 +42,10 @@ class PipelineContext(BaseModel):
     session_id: str | None = None
     # Earlier turns, oldest first. Filled at the HTTP boundary; empty on a first turn.
     history: list[dict] = []
+    # Turns in a row that resolved nothing (D14). Carried in from the session, written back
+    # by the API after the run; steps only add to it.
+    unresolved_streak: int = 0
+    asks_for_person: bool = False
 
     query: str = ""
     candidates: list[dict] = []
@@ -53,6 +57,8 @@ class PipelineContext(BaseModel):
     answer: Answer | None = None
     # Set instead of `answer` on the escalate route: a handoff is not an answer (D12).
     escalation: dict | None = None
+    # Which D14 trigger fired, for the operator reading the handoff.
+    escalation_trigger: str | None = None
 
     # What actually ran, for the SSE step events. No step may append without running (D9).
     events: list[tuple[str, str]] = []
@@ -87,6 +93,7 @@ class Pipeline:
         sink: Callable[[str, dict], None] | None = None,
         session_id: str | None = None,
         history: list[dict] | None = None,
+        unresolved_streak: int = 0,
     ) -> PipelineContext:
         ctx = PipelineContext(
             question=question,
@@ -94,6 +101,7 @@ class Pipeline:
             sink=sink,
             session_id=session_id,
             history=history or [],
+            unresolved_streak=unresolved_streak,
         )
         for index, step in enumerate(self.steps, start=1):
             logger.info("[%d/%d] %s", index, len(self.steps), step.name)

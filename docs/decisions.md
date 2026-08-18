@@ -609,3 +609,41 @@ versus wheel change — rather than the precise next step of jacking and removal
 escalation it replaced and better than a full replay, but it is not yet a procedure the assistant
 walks someone through position by position. That needs retrieval to know where in a procedure the
 question sits, which nothing in the pipeline models today.
+
+---
+
+## D21 — The escalation counter lives in Python and the session, never in a model
+
+**Decision.** `sessions.unresolved_streak` is an integer. `resolve_query` reports two observations on
+the call it already makes — `asks_for_a_person`, and `progress` as one of `reports_failure`,
+`confirms_success`, `new_topic`, `unclear`. `next_streak()` turns the second into a count;
+`decide()` reads the count. The API carries the value in and writes it back. Three of D14's four
+triggers are now reachable; `escalation_trigger` records which one fired.
+
+**Why here.** D14 says the counter exists so the most consequential decision in the product is
+reproducible: a model asked "should I escalate?" cannot be replayed or asserted. Keeping the arithmetic
+in `next_streak()` and the threshold in one config value means the eval harness can set a starting
+streak on a row and assert the outcome, which is exactly how `esc-09` is tested.
+
+**Persistence sits at the boundary, not in a step**, the same choice D20 made for `history`.
+`ResolveQueryStep` adds to `ctx.unresolved_streak`; `api.py` writes it back only if it changed. A step
+that opened SQLite could not be run by the harness, which has no sessions.
+
+**The first version checked the streak after the score band, and was wrong.** The reasoning was that
+if the manual confidently answers *this* turn, something did resolve it, so the streak should not
+override. `esc-09` — "it is still not working", arriving with a streak of 2 — scored **+3.78** and
+answered from the manual. But a streak only reaches the threshold through turns the user reported as
+failures, or answers that were not grounded in their manual. A confident score on the next turn is the
+fourth attempt at what has already failed three times, and the reranker matching "not working" against
+some passage is not evidence to the contrary. Both new triggers are now checked **before** the band.
+
+**The handoff resets the counter.** Left standing at 3, every later turn in the session would escalate
+again, and the user would never get another answer.
+
+**Reset on success or a change of subject** comes from the same field. Confirming something worked, or
+moving to a new topic, sets the count to zero — measured working, along with the increment.
+
+**What is still a model's word.** Whether a message *reports a failure* is a judgement, and a wrong
+`reports_failure` inflates the count. The blast radius is bounded: it takes three to escalate, an
+escalation is recoverable, and the threshold is one number. That is the trade D14 chose deliberately —
+a model supplies evidence, Python counts and decides.
