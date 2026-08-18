@@ -1,8 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { loadSession, streamChat } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { loadSession, streamChat, type StoredMessage } from "@/lib/api";
+import { usePolledMessages } from "./use-polled-messages";
 import type { Citation, Message, Source } from "@/types/chat";
+
+/** One stored row as the UI's shape. Used on load and again while polling a handoff. */
+function fromStored(stored: StoredMessage): Message {
+  return {
+    id: stored.id,
+    role: stored.role,
+    content: stored.content,
+    source: (stored.source as Source) ?? undefined,
+    citations: stored.citations ?? [],
+    steps: [],
+    escalation: stored.escalation_id
+      ? { id: stored.escalation_id, reason: stored.escalation_reason ?? "", pages: [] }
+      : undefined,
+  };
+}
 
 function blank(role: Message["role"], content = ""): Message {
   return {
@@ -19,7 +35,11 @@ function blank(role: Message["role"], content = ""): Message {
 export function useChatStream(sessionId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  // Once a person has the conversation the pipeline no longer answers, so the transcript is
+  // mirrored from the server instead of streamed (D24).
+  const [handedOver, setHandedOver] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const polled = usePolledMessages(sessionId, handedOver);
 
   // Reopening a conversation restores it from the server, citations included.
   useEffect(() => {
@@ -29,23 +49,10 @@ export function useChatStream(sessionId: string | null) {
     loadSession(sessionId)
       .then((session) => {
         if (ignore) return;
-        setMessages(
-          session.messages.map((stored) => ({
-            id: stored.id,
-            role: stored.role,
-            content: stored.content,
-            source: (stored.source as Source) ?? undefined,
-            citations: stored.citations ?? [],
-            steps: [],
-            escalation: stored.escalation_id
-              ? {
-                  id: stored.escalation_id,
-                  reason: stored.escalation_reason ?? "",
-                  pages: [],
-                }
-              : undefined,
-          })),
-        );
+        setMessages(session.messages.map(fromStored));
+        // A conversation that was handed over stays handed over when reopened, so replies
+        // from the agent keep arriving without the pipeline being consulted.
+        setHandedOver(session.messages.some((stored) => stored.escalation_id !== null));
       })
       .catch(() => {
         if (!ignore) setMessages([]);
@@ -105,6 +112,10 @@ export function useChatStream(sessionId: string | null) {
               escalation,
               streaming: false,
             }));
+          } else if (frame.event === "handover") {
+            // No assistant turn is coming; drop the placeholder that was added for one.
+            setMessages((previous) => previous.slice(0, -1));
+            setHandedOver(true);
           } else if (frame.event === "error") {
             const { message: text } = frame.data;
             patchLast((message) => ({
@@ -134,6 +145,13 @@ export function useChatStream(sessionId: string | null) {
     [sessionId, busy, patchLast],
   );
 
+  // While a person has it, the server is the truth: their replies arrive by polling, and
+  // nothing here is streaming.
+  const shown = useMemo(
+    () => (handedOver && polled.length > 0 ? polled.map(fromStored) : messages),
+    [handedOver, polled, messages],
+  );
+
   // Derived, not reset in an effect: with no session there is nothing to show.
-  return { messages: sessionId ? messages : [], send, busy };
+  return { messages: sessionId ? shown : [], send, busy, handedOver };
 }

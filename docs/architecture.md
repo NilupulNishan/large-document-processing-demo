@@ -8,8 +8,8 @@ Everything runs locally. Azure OpenAI and Tavily are the only network calls.
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
 indexing. The online half is built end to end — `resolve_query`, `retrieve`, `rerank`, `gate`,
 `web_search`, `answer` and `escalate` — along with the SSE transport and the SQLite session store.
-The chat and PDF screens drive those from a browser. The operator inbox is not built, nor is D14's
-fourth escalation trigger. Each is marked **(not built)** below.
+The chat, PDF and operator screens drive those from a browser. D14's fourth escalation trigger and
+D4's context sentence are not built. Each is marked **(not built)** below.
 
 ## Two halves
 
@@ -220,6 +220,16 @@ and streams the user a confirmation carrying its reference. It sets `ctx.escalat
 `ctx.answer`: a handoff is not an answer, and `Source` stays `manual | manual+general | general` so
 the D13 distinction the UI renders keeps its meaning. The API emits an `escalated` event for it.
 
+The step also writes D14's **issue summary** and **suggested next step** into the record — one
+structured call, which replaces the answer call rather than adding one, since this route writes no
+answer. The summary is shown to the agent labelled as such and never as the user's own words (D24).
+
+**Once an escalation on a session is not closed, that session belongs to a person.** `POST /chat`
+checks `open_escalation_for_session()`, stores the user's message, emits a single `handover` frame and
+**runs no pipeline step**. Handover is derived from the `escalations` table rather than a flag on
+`sessions`, so there is one source of truth, and reopening the conversation re-derives it. Both sides
+poll `GET /sessions/{id}`; the reasoning against a persistent stream is in D24.
+
 Three of D14's four triggers are built: the gate rule, asking for a person, and the unresolved
 streak. **Manual-weak-and-web-weak is (not built).**
 
@@ -249,6 +259,7 @@ handoff then resets the counter, or every later turn in the session would escala
 | `POST /chat` | `{session_id, question}` → the stream below |
 | `GET /escalations` | operator inbox; optional `?status=open` |
 | `GET /escalations/{id}` | the full handoff package, transcript included |
+| `POST /escalations/{id}/reply` | an agent's turn, written into the user's session as `role="agent"` (D24) |
 | `PATCH /escalations/{id}` | `{status}` → open, picked_up or closed |
 
 ```
@@ -326,7 +337,7 @@ Next.js 16 with React 19 and Tailwind 4, in `frontend/`. One route, a resizable 
 |---|---|---|
 | Chat | Manual picker, conversation, streamed answer, citation pills, session history panel | built |
 | PDF pane | Renders the cited page beside the answer; citations navigate it | built |
-| Operator inbox | Lists open escalations; opens the full handoff package for one (D12) | **(not built)** |
+| Operator inbox | `/inbox`. Lists handoffs; opens one as a conversation — the labelled issue summary, the rule that fired, pages already shown, and the whole transcript rendered through the chat's own `MessageItem` so it reads as the user saw it. An agent replies from here and the user answers back (D23, D24). Status is shown, never changed | built |
 
 The same shape as the backend: one boundary for the wire, settings read once, components
 presentational.

@@ -281,6 +281,9 @@ the user. In practice a person owns one product and does not switch manuals mid-
 
 ## D12 — Escalation is a real record with a minimal inbox, not a live-chat integration
 
+> **Superseded by D24 (Slice 16).** The inbox now carries a two-way conversation with a human agent.
+> This entry stands as the record of the earlier position and why it was reasonable at the time.
+
 **Decision.** Escalation writes a complete `escalations` row — full transcript, steps already tried,
 pages shown, trigger reason, suggested next step. The user sees a confirmation with a reference
 number. A small operator screen lists open handoffs and shows the full package for one.
@@ -709,3 +712,90 @@ answers.
 **Measured after, twice.** Routing **92% (54/59) → 97% (57/59)**, `escalate` **12/12** in both runs.
 The two remaining misroutes are `bj30-02`, the flaky row near the band, and `bj30-23`, the table
 serialisation D16 already ruled on. Neither is touched by this change.
+
+---
+
+## D23 — The operator inbox is a route in the same app, and read-only
+
+**Decision.** `/inbox` in the existing Next.js app, not a second deployment. It lists handoffs and
+opens one in full. Status is displayed and never changed, though `PATCH /escalations/{id}` exists.
+
+**Why one app.** `AGENTS.md` rules out authentication and user accounts, so a separate operator
+deployment guards nothing — it would be a boundary with no check behind it. `frontend/src/lib/config.ts`
+is the only place settings are read, and a second app duplicates it along with `API_BASE`. One
+`tsc` / `lint` / `build` pass stays one rather than two. And in a demo, following a reference from the
+chat to the operator view in the same browser is the moment that sells the handoff; two processes on
+two ports is a thing to fail live. D12 asks for an operator *screen*, not a system.
+
+What belongs in the pitch instead of the build: in production this sits behind the client's own
+helpdesk auth, or becomes a queue integration — which `AGENTS.md` lists as a non-goal.
+
+**Why read-only.** The screen exists to show that the handoff carries everything a human needs. Adding
+status controls makes it a workflow tool, which is a different product, and leaves a live demo in a
+mutated state. The endpoint stays for whoever integrates a real helpdesk.
+
+**The transcript is rendered by the chat's own `MessageItem`.** `StoredMessage` maps onto `Message`
+with `steps: []` and nothing else missing. That is worth more than the code it saves: the operator sees
+the conversation *exactly as the user saw it*, including the source badge on every answer, so "this
+part came from the manual and this part did not" is visible rather than described. D13's whole point is
+that the distinction is rendered, and it holds on this screen for free.
+
+**A React rule caught a real bug.** ESLint's `react-hooks/set-state-in-effect` rejected a `loading`
+flag set in the effect body. Deriving it from a `loadedId` instead removed the cascading render *and* a
+race that was already there in the first version — a slow response for an earlier selection could land
+last and overwrite a newer one. The fix carries a `cancelled` guard.
+
+**One type was wrong and the payload proved it.** `EscalationPackage.session` was typed as
+`SessionSummary`, which has a `messages` count. `get_escalation` returns the raw `sessions` row, which
+has no such field — the count only exists in `list_sessions`. Checked against a real record rather
+than assumed, and narrowed to what the endpoint actually sends.
+
+---
+
+## D24 — Live handoff to a human agent, superseding D12
+
+**Decision.** An escalation carries a written summary of the user's struggle and a suggested first
+step. An agent opens it in `/inbox` as a conversation and replies; the reply is written into the
+user's own session as `role="agent"` and appears in their chat. The user can answer back. **While an
+escalation on that session is not closed, `POST /chat` stores the message and runs no pipeline step
+at all.** Both sides poll `GET /sessions/{id}` every two seconds.
+
+**This supersedes D12**, which said escalation was "a minimal inbox, not a live-chat integration" and
+placed agent-side UI "well beyond this scope". That was correct when no inbox existed. It is changed
+deliberately rather than quietly contradicted, and D12 stands as the record of the earlier position.
+
+**Two parts were never new scope.** D14 fixed the handoff payload as "reference, **issue summary**,
+... trigger reason, **suggested next step**, and the full transcript". Both were unbuilt. This slice
+builds them.
+
+**No net model calls.** An escalating turn writes no answer — `AnswerStep` returns early on that
+route — so the summary call replaces the answer call rather than adding one, and only on escalation.
+
+**Polling, not SSE, and the reasoning matters more than the choice.** The existing SSE is
+request-scoped: `POST /chat` opens a stream, a worker thread pushes into a `queue.Queue`, and the
+stream ends with the answer. A live agent channel is a different lifecycle — a persistent
+subscription waiting on someone else's message. That needs a per-session subscriber registry, fan-out
+on write, disconnect detection or leaked queues, reconnect with `Last-Event-ID` or dropped messages,
+and heartbeats. All of it lives in process memory and is **lost on a dev-server reload**, silently,
+while connections stay open. `AGENTS.md` also rules out queues and workers. Polling is one
+`setInterval` against an endpoint that already existed, holds no server state, and survives a reload.
+Two seconds is well inside the time a person takes to type. If the transport itself ever becomes a
+selling point, the upgrade is one hook and one endpoint.
+
+**The summary is labelled, never presented as the user's words.** It appears as "Issue summary" above
+the real transcript. Attributing generated text to the user is precisely the mislabelling D13 exists
+to prevent, and an agent acting on a fabricated "quote" from a customer is a real harm, not a
+cosmetic one.
+
+**Handover is derived, not a second flag.** `open_escalation_for_session()` reads the `escalations`
+table rather than adding a boolean to `sessions`, so there is one source of truth about whether a
+person has the conversation. Reopening a session later re-derives it from the transcript.
+
+**Still deliberately absent**, and to be said plainly when demonstrating it: no presence, no routing,
+no multiple agents, no agent authentication, no typing indicators, no notifications, and nothing is
+transmitted anywhere. One agent, one thread, local only. A handed-over session stays with the human;
+handing it back to the assistant is not built.
+
+**A trap this slice walked into and fixed.** `create_escalation` inserted positionally
+(`INSERT INTO escalations VALUES (...)`), so adding the two summary columns broke it — the same trap
+`create_session` had in D21. Both now name their columns.

@@ -132,6 +132,9 @@ const markdownComponents: Components = {
 
 export default function MessageItem({ message, onPageClick }: Props) {
   const isUser = message.role === "user";
+  // A human's turn, not the assistant's. Rendered differently on purpose: the user must never
+  // have to guess whether they are talking to a person (D24).
+  const isAgent = message.role === "agent";
   const badge = message.source ? SOURCE_BADGE[message.source] : undefined;
 
   return (
@@ -142,9 +145,18 @@ export default function MessageItem({ message, onPageClick }: Props) {
         className={`max-w-[85%] rounded-3xl px-5 py-4 transition-all duration-200 ${
           isUser
             ? "rounded-br-md bg-blue-600 text-white shadow-md"
-            : "rounded-bl-md border border-slate-200 bg-white shadow-sm"
+            : isAgent
+              ? "rounded-bl-md border border-emerald-200 bg-emerald-50 shadow-sm"
+              : "rounded-bl-md border border-slate-200 bg-white shadow-sm"
         }`}
       >
+        {isAgent && (
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
+            <UserRound className="h-3 w-3" />
+            Support agent
+          </div>
+        )}
+
         {!isUser && message.steps.length > 0 && (
           <div className="mb-3">
             <StatusPills steps={message.steps} active={Boolean(message.streaming)} />

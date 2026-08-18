@@ -1483,3 +1483,180 @@ uv run --project backend --locked --no-sync python eval/run.py
 - [ ] Compound questions are routed whole, so "can I, and how deep" loses its answerable half.
 - [ ] D4's context sentence — still the fix for `x55-08`'s retrieval, still `(not built)`.
 - [ ] Operator inbox — next.
+
+---
+
+## Slice 15 — the operator inbox
+
+### Outcome
+
+`/inbox` renders the handoffs the backend has been writing since Slice 10. The escalation story can now
+be shown end to end: a question the gate will not answer, the reference the user is given, and the
+package a person picks up. Nothing on the screen is new backend work — all three endpoints already
+existed and are unchanged.
+
+### One app, not two
+
+`AGENTS.md` rules out authentication, so a separate operator deployment would be a boundary with no
+check behind it. It would also duplicate `config.ts` and `API_BASE`, and double the frontend
+verification pass for the same demo. The deciding argument is the demo itself: following a reference
+from the chat into the operator view in one browser is the moment that sells the handoff, and two
+processes on two ports is a thing to fail live. Reasoning in D23.
+
+### What makes the screen worth showing
+
+Two things that only became true in the last two slices. `escalation_trigger` names *which* of D14's
+rules fired, so the reason reads "The manual covers this subject but does not state the value asked
+for" rather than one constant for every handoff. And `get_escalation` already returned the whole
+transcript, which is D14's actual promise — a human never makes the user start again.
+
+The transcript is rendered through the chat's own `MessageItem`. `StoredMessage` maps onto `Message`
+by supplying `steps: []`. The saving in code is minor; what matters is that the operator sees the
+conversation **exactly as the user saw it**, source badges included, so "this answer was not from your
+manual" is visible on the screen rather than described in prose.
+
+### The linter caught a real bug, not a style point
+
+ESLint rejected a `loading` flag set synchronously in an effect body
+(`react-hooks/set-state-in-effect`). Deriving it from a `loadedId` removed the cascading render and,
+in doing so, exposed a race the first version already had: a slow response for an earlier selection
+could land last and overwrite a newer one. The rewrite carries a `cancelled` guard.
+
+### A type that agreed with itself and not with the payload
+
+`EscalationPackage.session` was typed as `SessionSummary`, which carries a `messages` count.
+`get_escalation` returns the raw `sessions` row and has no such field — the count exists only in
+`list_sessions`. `tsc` cannot catch a wire format that lies, so the record was read out of SQLite and
+the type narrowed to what is actually sent. Same class of error as the doc claims corrected earlier in
+this log: a description that was true once, of something else.
+
+### Commands
+
+```bash
+npm exec tsc -b --pretty false
+npm run lint
+npm run build
+```
+
+### Observed
+
+| | |
+|---|---|
+| Routes | `/` and `/inbox`, both static |
+| tsc, ESLint, production build | clean |
+| Backend changes | none — the endpoints already existed |
+| Escalations in the store | 1, from an earlier session |
+
+### Checkpoint
+
+- [x] `/inbox` lists handoffs, newest first, with the rule that fired.
+- [x] Opening one shows the question, the reason, the pages already shown and the whole transcript.
+- [x] The transcript renders as the user saw it, source badges included.
+- [x] Read-only: status is shown, never changed.
+- [x] `?id=ESC-XXXXXX` opens straight to a reference.
+- [ ] **Not yet walked in a browser.** tsc, lint and build pass and the payload shapes were checked
+      against a real record, but nobody has clicked it.
+- [ ] The reference inside a chat message is not a link. That is the strongest demo path and it needs
+      `message-item.tsx`, which this slice deliberately left alone.
+- [ ] Only one escalation exists locally, carrying the old generic reason. The per-rule reasons appear
+      on handoffs created from here on.
+
+---
+
+## Slice 16 — the handoff becomes a conversation
+
+### Outcome
+
+An escalation now carries a written summary of what the user was struggling with, an agent replies to
+it from `/inbox`, and the reply lands in the user's chat badged as a person. The user can answer back,
+and **no pipeline step runs for that session while a human has it**. Both sides update without a
+refresh.
+
+### It supersedes a decision rather than contradicting one
+
+D12 said escalation was "a minimal inbox, not a live-chat integration", and put agent-side UI "well
+beyond this scope". That was right when there was no inbox. D24 replaces it and D12 keeps its place in
+the log with a pointer, because a decision doc that quietly stops being true is the failure `AGENTS.md`
+rule 5 exists to prevent.
+
+Two of the four pieces were never new scope. D14 fixed the payload as "reference, **issue summary**,
+... trigger reason, **suggested next step**, and the full transcript", and neither had been built.
+
+### The summary is worth the call, and the call is free
+
+An escalating turn writes no answer — `AnswerStep` returns on that route — so the summary replaces the
+answer call instead of adding one. What it produces is the point:
+
+> The user is trying to find the correct torque specification for tightening wheel nuts on their
+> vehicle. They have consulted the vehicle owner manual, but it does not provide the specific torque
+> value they are asking for. They are currently stuck because the manual lacks the exact wheel-nut
+> tightening torque.
+
+That is what an agent needs before saying anything. It is labelled **Issue summary** above the real
+transcript and never rendered as the user's own words — attributing generated text to a customer is
+the mislabelling D13 exists to prevent, and an agent acting on a fabricated quote is a real harm.
+
+### Polling, and why not SSE
+
+The transport question was asked directly and the answer was polling. The existing SSE is
+request-scoped: the stream opens on `POST /chat` and ends with the answer. A live agent channel is a
+persistent subscription waiting on another person's message, which needs a subscriber registry,
+fan-out on write, disconnect detection, reconnect with `Last-Event-ID`, and heartbeats — all in
+process memory, **all lost on a dev-server reload while connections stay open**. In a two-day window
+ending in a live demo, that is the most likely thing to fail on stage. Polling is one `setInterval`
+against `GET /sessions/{id}`, which already existed. Reasoning in D24.
+
+### The rule the feature rests on
+
+`open_escalation_for_session()` reads the `escalations` table rather than adding a flag to `sessions`,
+so there is one source of truth about who has the conversation. `POST /chat` checks it, stores the
+message, emits a single `handover` frame and returns. Verified directly: with an open escalation the
+transcript grows and not one pipeline step is logged.
+
+```
+[user ] What torque do I tighten the wheel nuts to?
+[bot  ] I do not want to guess at this one — it is a safety-critical question…
+[AGENT] Hi, I can help with that. Which variant do you have?
+[user ] the 1.5T one
+[AGENT] Checked with the workshop: 110 N·m for your variant.
+```
+
+### The same trap, twice
+
+`create_escalation` inserted positionally, so adding the two summary columns broke it — exactly what
+`create_session` did in Slice 13 when the streak column arrived. Both now name their columns. Worth
+recording as a pattern rather than two incidents: a positional `INSERT` in this codebase is a latent
+break waiting on the next migration.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Handoff payload | reference, reason, pages, transcript | + issue summary, + suggested next step |
+| Agent → user | nothing | `role="agent"` in the user's own session |
+| User → agent | nothing | stored, pipeline suppressed |
+| Model calls per escalating turn | grade (+ resolve) | unchanged — summary replaces answer |
+| Routes | `/`, `/inbox` | unchanged |
+
+### Checkpoint
+
+- [x] The card carries a summary that describes the struggle, not the answer.
+- [x] The summary is labelled as written for the agent, never as the user's words.
+- [x] An agent reply reaches the user's chat, badged as a person.
+- [x] A handed-over session runs no pipeline step; verified against the store.
+- [x] Reopening a handed-over session keeps it handed over.
+- [x] `tsc`, ESLint and the production build are clean.
+- [ ] **Not walked in two browser windows yet.** Every layer is verified against the database and
+      the build passes, but the live two-way loop has not been clicked.
+- [ ] Handing a session back to the assistant is not built; a handed-over session stays with the human.
+- [ ] The `suggested_next_step` wording drifts toward advice the transcript already rules out — it
+      suggested checking the manual for a value the summary had just said is absent.
+- [ ] No presence, routing, multiple agents or agent auth. Say so when demonstrating it.

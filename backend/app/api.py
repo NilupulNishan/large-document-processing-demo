@@ -57,6 +57,10 @@ class EscalationStatus(BaseModel):
     status: Literal["open", "picked_up", "closed"]
 
 
+class AgentReply(BaseModel):
+    text: str
+
+
 @app.get("/manuals")
 def manuals() -> list[dict]:
     return db.list_manuals()
@@ -105,6 +109,17 @@ def escalation(escalation_id: str) -> dict:
     return found
 
 
+@app.post("/escalations/{escalation_id}/reply")
+def reply(escalation_id: str, body: AgentReply) -> dict:
+    """An agent's turn, written into the user's own conversation (D24)."""
+    found = db.get_escalation(escalation_id)
+    if found is None:
+        raise HTTPException(404, "No such escalation")
+    if not body.text.strip():
+        raise HTTPException(422, "An empty reply is not a reply")
+    return db.add_message(found["session_id"], "agent", body.text.strip())
+
+
 @app.patch("/escalations/{escalation_id}")
 def update_escalation(escalation_id: str, body: EscalationStatus) -> dict:
     if db.get_escalation(escalation_id) is None:
@@ -128,6 +143,16 @@ def chat(body: Ask) -> StreamingResponse:
     db.add_message(body.session_id, "user", body.question)
     if found["title"] == "New conversation":
         db.rename_session(body.session_id, body.question)
+
+    # A person has this conversation, so the assistant stays out of it (D24). The message is
+    # stored for the agent to read; no step of the pipeline runs.
+    handover = db.open_escalation_for_session(body.session_id)
+    if handover:
+        return StreamingResponse(
+            iter([_frame("handover", {"escalation_id": handover["id"]})]),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return StreamingResponse(
         _run(

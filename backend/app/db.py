@@ -58,6 +58,9 @@ CREATE INDEX IF NOT EXISTS escalations_status ON escalations(status, created_at)
 _MIGRATIONS = (
     "ALTER TABLE messages ADD COLUMN escalation_id TEXT",
     "ALTER TABLE sessions ADD COLUMN unresolved_streak INTEGER NOT NULL DEFAULT 0",
+    # D14 fixed these as part of the handoff payload from the start; built in Slice 16.
+    "ALTER TABLE escalations ADD COLUMN summary TEXT",
+    "ALTER TABLE escalations ADD COLUMN next_step TEXT",
 )
 
 
@@ -215,12 +218,36 @@ def create_escalation(
         "updated_at": _now(),
     }
     with connect() as db:
+        # Named, not positional: a positional insert breaks the moment a column is added,
+        # which is exactly what the summary columns did to it.
         db.execute(
-            "INSERT INTO escalations VALUES (:id,:session_id,:manual_id,:question,:reason,"
-            ":pages_json,:status,:created_at,:updated_at)",
+            "INSERT INTO escalations (id,session_id,manual_id,question,reason,pages_json,"
+            "status,created_at,updated_at) VALUES (:id,:session_id,:manual_id,:question,"
+            ":reason,:pages_json,:status,:created_at,:updated_at)",
             row,
         )
     return {**row, "pages": pages}
+
+
+def set_handoff_summary(id: str, summary: str, next_step: str) -> None:
+    """The written half of D14's payload, filled in once the record exists."""
+    with connect() as db:
+        db.execute(
+            "UPDATE escalations SET summary = ?, next_step = ? WHERE id = ?",
+            (summary, next_step, id),
+        )
+
+
+def open_escalation_for_session(session_id: str) -> dict | None:
+    """The handover check. Derived from `escalations` so there is one source of truth about
+    whether a person has this conversation, rather than a second flag on `sessions`."""
+    with connect() as db:
+        row = db.execute(
+            "SELECT * FROM escalations WHERE session_id = ? AND status != 'closed'"
+            " ORDER BY created_at DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def list_escalations(status: str | None = None) -> list[dict]:

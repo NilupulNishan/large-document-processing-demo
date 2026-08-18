@@ -1,7 +1,13 @@
 /** The backend boundary. Wire formats stop here; components never call fetch. */
 
 import { API_BASE } from "./config";
-import type { Citation, Manual, SessionSummary, StreamEvent } from "@/types/chat";
+import type {
+  Citation,
+  EscalationSummary,
+  Manual,
+  SessionSummary,
+  StreamEvent,
+} from "@/types/chat";
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
@@ -26,7 +32,7 @@ export const createSession = (manual: string) =>
 
 export type StoredMessage = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "agent";
   content: string;
   source: string | null;
   citations: Citation[];
@@ -39,6 +45,28 @@ export const loadSession = (id: string) =>
 
 export const pdfUrl = (manualId: string) =>
   `${API_BASE}/manuals/${manualId}/pdf`;
+
+/** The handoff package: the record, its session, and the whole transcript (D14).
+ *  `session` is the raw row, which carries no message count — that is only in /sessions. */
+export type EscalationPackage = EscalationSummary & {
+  session: {
+    id: string;
+    manual_id: string;
+    title: string;
+    unresolved_streak: number;
+    created_at: string;
+    updated_at: string;
+  };
+  transcript: StoredMessage[];
+};
+
+export const listEscalations = () => get<EscalationSummary[]>("/escalations");
+
+/** An agent's turn, written into the user's own conversation (D24). */
+export const replyToEscalation = (id: string, text: string) =>
+  post<StoredMessage>(`/escalations/${id}/reply`, { text });
+export const loadEscalation = (id: string) =>
+  get<EscalationPackage>(`/escalations/${id}`);
 
 /**
  * Stream one answer. Yields typed frames as they arrive rather than buffering,

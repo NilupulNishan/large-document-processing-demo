@@ -42,6 +42,19 @@ export type Escalation = {
   created_at?: string;
 };
 
+/** A row in the operator inbox. Mirrors db.list_escalations. */
+export type EscalationSummary = Escalation & {
+  session_id: string;
+  manual_id: string;
+  question: string;
+  /** D14's written payload. Null on records created before Slice 16. */
+  summary: string | null;
+  next_step: string | null;
+  status: "open" | "picked_up" | "closed";
+  created_at: string;
+  updated_at: string;
+};
+
 /** One SSE frame. `step` labels describe work that actually ran (D9). */
 export type StreamEvent =
   | { event: "step"; data: { step: string; label: string } }
@@ -57,11 +70,13 @@ export type StreamEvent =
       };
     }
   | { event: "escalated"; data: Escalation & { message: string } }
+  | { event: "handover"; data: { escalation_id: string } }
   | { event: "error"; data: { message: string } };
 
 export type Message = {
   id: string;
-  role: "user" | "assistant";
+  /** `agent` is a human replying after a handoff — never the pipeline (D24). */
+  role: "user" | "assistant" | "agent";
   content: string;
   /** Absent until the stream finishes; drives the source badge. */
   source?: Source;

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Inbox } from "lucide-react";
 import type { Manual, SessionSummary } from "@/types/chat";
 
 type Props = {
@@ -92,6 +94,14 @@ export default function Sidebar({
           ))
         )}
       </div>
+
+      <Link
+        href="/inbox"
+        className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:bg-white hover:text-slate-800"
+      >
+        <Inbox className="h-3.5 w-3.5" />
+        Operator inbox
+      </Link>
     </aside>
   );
 }

@@ -21,7 +21,7 @@ Runs entirely locally. Azure OpenAI and Tavily are the only network calls.
 
 ## Layout
 
-The intended shape. Parts not yet built are marked; see Status below.
+Everything here exists. What is still unbuilt is named under Status below.
 
 ```
 backend/          FastAPI app, pipeline steps, providers
@@ -30,17 +30,15 @@ backend/          FastAPI app, pipeline steps, providers
     db.py         SQLite — manuals, sessions, messages
     pipeline/     resolve_query → retrieve → rerank → gate → web_search → answer → escalate
     providers/    Azure, LanceDB, Docling, Tavily adapters — SDK types stop here
-frontend/         Next.js UI: manual picker, chat, PDF pane, session history, operator inbox*
+frontend/         Next.js UI: manual picker, chat, PDF pane, session history, operator inbox
   src/lib/        config.ts and api.ts — the only place the wire format is known
   src/types/      the backend contract, mirrored so a change there fails the type check
-  src/hooks/      use-chat-stream.ts — the one stateful piece
-  src/components/ chat/, pdf/, source/, layout/ — presentational
+  src/hooks/      use-chat-stream.ts and use-polled-messages.ts — the stateful pieces
+  src/components/ chat/, pdf/, source/, inbox/, layout/ — presentational
 eval/             questions.jsonl + run.py — the test suite for this project
 playground/       Experiment scripts. Not application code.
 scripts/          ingest.py, index.py and dev helpers
 data/             Source manuals, LanceDB store, SQLite database (all gitignored)
-
-* not built yet
 ```
 
 ## Running it
@@ -134,7 +132,13 @@ because a high retrieval score means the manual discusses the subject, not that 
 asked for.
 
 Safety-critical questions the manual does not cover route to `escalate`: the stream ends with an
-`escalated` frame carrying a reference, and the handoff record holds the transcript.
+`escalated` frame carrying a reference, and the handoff record holds the transcript, a written summary
+of what the user was stuck on, and the rule that fired.
+
+Open `/inbox` in a second window to see it from the other side. An agent replies there and the reply
+appears in the user's chat within two seconds, badged as a person. **While a handoff is open that
+session runs no pipeline step at all** — the assistant stays out of a conversation a human has taken
+over (D24). Nothing is transmitted anywhere; there is no presence, routing, or agent authentication.
 
 The scripted equivalent, with per-frame timing:
 
@@ -166,12 +170,14 @@ Built: ingestion, embedding and indexing; the full
 `resolve_query → retrieve → rerank → gate → web_search → answer → escalate` pipeline; SSE transport;
 session persistence; the chat and PDF screens.
 
-Not built: the operator inbox, and D14's `unresolved_streak` counter with the two escalation triggers
-that depend on it. `docs/architecture.md` marks each `(not built)` and is kept in step with the code.
+Not built: D14's fourth escalation trigger (manual weak **and** web weak), and D4's LLM-written
+context sentence at ingest. `docs/architecture.md` marks each `(not built)` and is kept in step with
+the code.
 
 Three known gaps, all measured and recorded rather than hidden:
 
-- An escalation record exists and the endpoints serve it, but nothing renders it yet.
+- `x55-08` retrieves nothing that explains hill descent control: the chunk that does say only "HDC"
+  and carries a meaningless heading. D4's context sentence is the fix, and is not built.
 - The grader disagrees with itself on a minority of the rows it decides, so a question sitting near
   a band can route differently between runs. Every routing number here should be read as ±2 rows.
 - `bj30-23` — the trailer weight sits in a table row the grader reads as not answering the question.
