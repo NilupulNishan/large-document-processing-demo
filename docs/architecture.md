@@ -88,26 +88,99 @@ Fusion scores rank position rather than relevance, and measurably cannot separat
 from a request for a poem (D3). The assistant does not dead-end: a weak manual result downgrades the
 *source* of the answer, it does not refuse the question.
 
-Above `GATE_HIGH` the manual answers and **no grader runs** — no call, and no step event. At or below
-it the grader runs once and reports three observations; `decide()` turns those into a route:
+**The grader runs on every question** (D22). Above `GATE_HIGH` the score still decides, with one
+exception, because a high score means the manual *discusses* the subject and not that it *states the
+number asked for*. `decide()` turns the observations into a route; the branching is drawn below.
 
-| Grader says | Score | Route | Answer source |
-|---|---|---|---|
-| — (user asked for a person) | any | escalate — D14, checked first | — |
-| — (`unresolved_streak` >= 3) | any | escalate — D14 | — |
-| — (not called) | above HIGH | answer from manual | `manual` |
-| not about the domain | any | decline | — |
-| passages answer it | above LOW | answer from manual | `manual` |
-| passages answer it | at or below LOW | answer from manual, supplement the gaps | `manual+general` |
-| passages do not, safety topic | any | escalate — never improvise here | — |
-| passages do not | any | web search + general expertise | `general` |
+Each route fixes what the user is shown, and `source` is assigned in Python from it, never by a model:
 
-`GATE_LOW` does **not** decide whether the grader is called — only `GATE_HIGH` does. `GATE_LOW`
+| Route | Answer source | Citations |
+|---|---|---|
+| `manual` | `manual` | pages |
+| `manual+general` | `manual+general` | pages, with the gaps marked in prose |
+| `general` | `general` | web results, behind a "not covered by your manual" line |
+| `decline` | `general` | none — one short refusal |
+| `escalate` | — | a handoff record; no answer is written at all |
+
+The override is deliberately narrow. It fires only where the answer is a **specific value**, so it can
+be checked: `quoted()` verifies the grader's `answer_quote` really appears in the excerpts it was
+shown, ignoring whitespace and case. A procedure has no single sentence carrying its answer, so an
+absent quote proves nothing about one and the rule never applies. Vetoing on the grader's booleans
+alone was measured and is worse than leaving the bypass in place — the numbers are in D22.
+
+### Which rule decides, and what it was told
+
+`decide()` in evaluation order. **session** inputs come from the SQLite session row and the turn's
+own history; **grader** inputs are observations from one model call; **score** is the cross-encoder's.
+Nothing a model returns is used as a destination, and the grader is never shown the score or the bands.
+
+```mermaid
+flowchart TB
+    start(["Turn arrives"]) --> person{"session<br/>asked for a person?"}
+    person -->|yes| e1["escalate<br/>The user asked to speak to a person"]
+    person -->|no| streak{"session<br/>unresolved_streak ≥ 3?"}
+    streak -->|yes| e2["escalate<br/>Nothing resolved it across N turns"]
+    streak -->|no| band{"score<br/>above GATE_HIGH −4.1?"}
+
+    band -->|yes| val{"grader<br/>wants a value, safety topic,<br/>and no verified quote?"}
+    val -->|yes| e3["escalate<br/>Covers the subject, does not<br/>state the value asked for"]
+    val -->|no| m1["manual"]
+
+    band -->|no| dom{"grader<br/>about the domain?"}
+    dom -->|no| dec["decline"]
+    dom -->|yes| ans{"grader<br/>passages answer it?"}
+    ans -->|yes| low{"score<br/>above GATE_LOW −7.5?"}
+    low -->|yes| m2["manual"]
+    low -->|no| mg["manual+general"]
+    ans -->|no| saf{"grader<br/>safety topic?"}
+    saf -->|yes| e4["escalate<br/>Safety-critical topic the<br/>manual does not cover"]
+    saf -->|no| gen["general<br/>web search + general expertise"]
+```
+
+The second line of each `escalate` box is the `escalation_trigger` written into the handoff record, so
+an operator reads why a question reached them rather than one constant for all of them (D12, D14, D22).
+
+### What survives between turns
+
+One integer on the session, `unresolved_streak`, plus the transcript. `api.py` reads both before the
+turn runs and writes the counter back only if a step changed it — persistence stays at the boundary,
+so the pipeline can be exercised by the eval harness with no database (D20, D21).
+
+```mermaid
+flowchart LR
+    db[("sessions.unresolved_streak")] --> rq
+
+    subgraph one["One turn"]
+        rq["resolve_query<br/>reports progress"] --> p{"progress"}
+        p -->|reports_failure| up["+1"]
+        p -->|confirms_success<br/>or new_topic| z["reset to 0"]
+        p -->|unclear| same["unchanged"]
+        up --> g["gate reads it"]
+        z --> g
+        same --> g
+        g --> out{"outcome"}
+        out -->|"answered, source ≠ manual"| up2["+1"]
+        out -->|escalated| z2["reset to 0<br/>a person has it now"]
+        out -->|answered from manual| same2["unchanged"]
+    end
+
+    up2 --> w[["api.py writes back<br/>if it changed"]]
+    z2 --> w
+    same2 --> w
+    w --> db
+```
+
+A first turn has no history, so `resolve_query` makes no call and the left branch does not run; the
+counter can still move on the right, from an answer that was not grounded in the manual.
+
+Neither band decides whether the grader is called — since D22 it always is. `GATE_HIGH` decides how
+much authority the verdict has: above it only a missing, quotable value overrides the score. `GATE_LOW`
 separates a confident manual answer from one that needs supplementing, once the grader has said the
 passages answer the question.
 
-This is the Corrective-RAG pattern. The routing rules are a pure function over a score and three
-booleans; the grader is the only model call, and it reports observations, not a destination.
+This is the Corrective-RAG pattern. The routing rules are a pure function over a score, four booleans
+and one checked fact; the grader reports observations, never a destination, and never sees the score,
+the bands or the routes.
 
 **5 · web_search** — Conditional, and only on the `general` route: `manual+general` keeps to the
 manual plus general guidance, so only a total miss earns a network call (brief items 15 and 16). The
@@ -192,7 +265,8 @@ carries no `source` and no citations, because it is a handoff rather than an ans
 Plus `event: error`, because a stream that dies silently is indistinguishable from one still thinking.
 
 Step events describe work that actually happened. No invented stages, no artificial delays. A step
-that is skipped emits no event — above `GATE_HIGH` no grader runs, so no `gate` event is sent.
+that is skipped emits no event — a first turn has no history, so no `resolve_query` event is sent.
+The `gate` event now appears on every question, because since D22 the grader is always called.
 
 The pipeline is synchronous by design. `POST /chat` runs it on a worker thread whose sink pushes to a
 `queue.Queue`, and the response generator drains that queue; that, not async, is what lets a step
@@ -206,8 +280,9 @@ question anyone asks.
 ## Boundaries
 
 - Azure, LanceDB, Docling and Tavily SDK types stop in `backend/app/providers/`.
-- Gate routing and escalation triggers are pure functions over scores and counters. The gate's
-  ambiguous-band grader is the single exception, and it returns a relevance score, not a route.
+- Gate routing and escalation triggers are pure functions over scores, counters and booleans. The
+  grader and the follow-up rewrite are the model calls that feed them; both report observations, and
+  one of those observations — the quoted value — is verified against the passages before it counts.
 - `api.py` owns HTTP and SSE framing, `db.py` owns SQLite, and the pipeline owns orchestration.
   There is no separate service layer: `build_pipeline()` already is one, and a module that only
   forwards calls to it would be a layer with nothing in it.
@@ -292,8 +367,8 @@ are solid and drive the pane, web pills are dashed and open a tab. Repeated page
 ```
 
 `expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 59 rows cover four of the
-five: `manual` 43, `escalate` 10, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
-that path is unmeasured.** `kind` is `procedure` 23, `safety` 13, `spec` 10, `symptom` 5, `absent` 4,
+five: `manual` 41, `escalate` 12, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
+that path is unmeasured.** `kind` is `procedure` 21, `safety` 15, `spec` 10, `symptom` 5, `absent` 4,
 `handoff` 2, `offtopic` 2, so weakness can be located rather than just observed. Pages are labelled
 from the source text, never from retrieval output.
 
@@ -309,7 +384,8 @@ bypasses in production bypasses here — and lists every misroute with its score
 step is never called and answer prose is never scored.
 
 Two caveats on that number. The grader is not fully deterministic even at temperature 0, so rows
-sitting near `GATE_HIGH` can change route between runs (`bj30-16` is one); a single run is not proof.
+sitting near a band can change route between runs (`bj30-02` and `bj30-16` trade places); a single run
+is not proof, and every figure here should be read as ±2 rows.
 And accuracy counts misroutes equally when their costs are not equal — a safety question answered
 confidently from the manual is far worse than a covered question answered from general knowledge.
 

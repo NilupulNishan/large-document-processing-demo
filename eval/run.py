@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
 from app.config import GATE_HIGH, GATE_LOW, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
-from app.pipeline.gate import decide, grade  # noqa: E402
+from app.pipeline.gate import decide, grade, quoted  # noqa: E402
 from app.pipeline.resolve import next_streak, read  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
@@ -71,9 +71,11 @@ def main() -> None:
         row["fusion_rank"] = hit_rank(hits, expected)
         row["rerank_rank"] = hit_rank(ordered, expected)
         row["top_score"] = top = max((value for value, _ in scored), default=0.0)
-        # The gate as it runs at query time: above the band no grader is called (D2).
-        verdict = None if top > GATE_HIGH else grade(query, ordered[:RERANK_KEEP])
-        row["route"] = decide(top, verdict, streak, asks_for_person)
+        # The gate as it runs at query time: graded on every question, and the quote checked
+        # against what the grader was shown (D22).
+        passages = ordered[:RERANK_KEEP]
+        verdict = grade(query, passages)
+        row["route"] = decide(top, verdict, streak, asks_for_person, quoted(verdict, passages))
 
     grounded = [r for r in rows if r["expected_pages"]]
 
@@ -114,8 +116,9 @@ def main() -> None:
     for route, results in sorted(by_route.items()):
         print(f"    {route:16} {sum(results)}/{len(results)}")
 
-    graded = [r for r in rows if r["top_score"] <= GATE_HIGH]
-    print(f"\n  reached the grader: {len(graded)}/{len(rows)}")
+    # Every question is graded now; the band only decides what the verdict is allowed to do.
+    above = [r for r in rows if r["top_score"] > GATE_HIGH]
+    print(f"\n  above GATE_HIGH, where only a missing value overrides: {len(above)}/{len(rows)}")
     print(f"  bands GATE_HIGH {GATE_HIGH:+.2f}  GATE_LOW {GATE_LOW:+.2f}")
     print(f"\n{(time.perf_counter() - started) / len(rows) * 1000:.0f} ms per question end to end")
 

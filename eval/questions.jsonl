@@ -14,7 +14,7 @@
 {"id": "bj30-14", "question": "The car has broken down and needs towing. What do I need to know?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [259, 260, 261, 262], "expected_route": "manual", "kind": "safety"}
 {"id": "bj30-15", "question": "How do I change the wiper blades?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [215, 216], "expected_route": "manual", "kind": "procedure"}
 {"id": "bj30-16", "question": "How often should the car be serviced?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [210, 211, 212, 213, 214], "expected_route": "manual", "kind": "spec"}
-{"id": "bj30-17", "question": "Can I drive through water, and how deep?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [130, 131, 132], "expected_route": "manual", "kind": "procedure"}
+{"id": "bj30-17", "question": "Can I drive through water, and how deep?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "bj30-18", "question": "How do I fold the rear seats flat?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [49, 50, 51, 52], "expected_route": "manual", "kind": "procedure"}
 {"id": "bj30-19", "question": "A tyre pressure warning came up on the dashboard. What should I do?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [126, 127, 128], "expected_route": "manual", "kind": "symptom"}
 {"id": "bj30-20", "question": "How do I open the tailgate if the power fails?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [255, 256], "expected_route": "manual", "kind": "procedure"}
@@ -31,7 +31,7 @@
 {"id": "x55-09", "question": "How do I open the fuel filler flap and refuel?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [173], "expected_route": "manual", "kind": "procedure"}
 {"id": "x55-10", "question": "I accidentally put diesel in. What now?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [174], "expected_route": "manual", "kind": "safety"}
 {"id": "x55-11", "question": "How do I use the reversing camera?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [178, 179], "expected_route": "manual", "kind": "procedure"}
-{"id": "x55-12", "question": "How deep can I drive through water?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [168], "expected_route": "manual", "kind": "procedure"}
+{"id": "x55-12", "question": "How deep can I drive through water?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "x55-13", "question": "What does the tyre pressure monitoring fault alarm mean?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [118], "expected_route": "manual", "kind": "symptom"}
 {"id": "x55-14", "question": "How do I rotate the tyres?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [232, 233], "expected_route": "manual", "kind": "procedure"}
 {"id": "x55-15", "question": "What should I do before driving in winter?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [169], "expected_route": "manual", "kind": "procedure"}

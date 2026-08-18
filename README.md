@@ -119,17 +119,19 @@ Questions that exercise each route:
 
 | Ask | Expect |
 |---|---|
-| "How do I change a flat tyre?" | `source=manual`, page citations, no `gate` event |
-| "What engine oil does it take?" | `source=manual`, preceded by a `gate` event |
+| "How do I change a flat tyre?" | `source=manual`, page citations |
+| "What engine oil does it take?" | `source=manual`, an oil grade and a volume |
+| "What torque do I tighten the wheel nuts to?" (X55) | `escalate` — that manual states no torque |
 | then "I parked it, what now?" | a `resolve_query` event, then `source=manual` — not a new topic |
 | "What does the warranty cover?" | `source=general`, a `web` event, `[web]` citations |
 | "Write me a poem about the sea" | `decline`, one short refusal, no model call |
 
-Three step events are worth watching. A `gate` event appears only when the top score fell below
-`GATE_HIGH` and a grader call actually ran — seeing one on a question that answered confidently is a
-bug. A `web` event appears only on the `general` route; on a manual-answered question it means the
-gate misrouted. A `resolve_query` event appears only on a follow-up turn — seeing one on the first
-question of a conversation is a bug, since there is no history to read.
+Two step events are worth watching. A `web` event appears only on the `general` route; on a
+manual-answered question it means the gate misrouted. A `resolve_query` event appears only on a
+follow-up turn — seeing one on the first question of a conversation is a bug, since there is no
+history to read. The `gate` event now appears on every question: since D22 the grader runs each time,
+because a high retrieval score means the manual discusses the subject, not that it states the number
+asked for.
 
 Safety-critical questions the manual does not cover route to `escalate`: the stream ends with an
 `escalated` frame carrying a reference, and the handoff record holds the transcript.
@@ -170,8 +172,7 @@ that depend on it. `docs/architecture.md` marks each `(not built)` and is kept i
 Three known gaps, all measured and recorded rather than hidden:
 
 - An escalation record exists and the endpoints serve it, but nothing renders it yet.
-- A specification question on a subject the manual covers verbosely without stating the number can
-  score above `GATE_HIGH`, skip the grader, and answer from the manual. No threshold separates it;
-  see D19. `esc-06` and `fu-03` are that case in the eval.
+- The grader disagrees with itself on a minority of the rows it decides, so a question sitting near
+  a band can route differently between runs. Every routing number here should be read as ±2 rows.
 - `bj30-23` — the trailer weight sits in a table row the grader reads as not answering the question.
   Neither table serialisation fixed it (D16).

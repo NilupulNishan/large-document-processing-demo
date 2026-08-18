@@ -647,3 +647,65 @@ moving to a new topic, sets the count to zero — measured working, along with t
 `reports_failure` inflates the count. The blast radius is bounded: it takes three to escalate, an
 escalation is recoverable, and the threshold is one number. That is the trade D14 chose deliberately —
 a model supplies evidence, Python counts and decides.
+
+---
+
+## D22 — The gate grades every question, and a missing value is checked, not judged
+
+**Decision.** `GateStep` calls the grader on every question. Above `GATE_HIGH` the score still
+decides, with one exception: where the question **asks for a specific value**, the subject **is a
+safety topic**, and the grader **cannot quote that value from the passages it was shown**, the route
+becomes `escalate`. `Verdict` gains `asks_for_a_specific_value: bool` and `answer_quote: str`, and
+`quoted()` checks the quote really appears in the excerpts, ignoring whitespace and case.
+
+**Why.** D19 left this open: the X55 scores **+3.29** for "what torque do I tighten the wheel nuts to?"
+and contains no torque figure anywhere. Above the band no grader ran, so it answered from the manual
+with page citations — the exact failure the product exists to prevent. No threshold closes it;
+correct `manual` rows span −7.21 to +9.29 with that question at +3.29 among them.
+
+**Three simpler policies were measured first and rejected**, over 3 runs of all 59 rows:
+
+| policy | fully right |
+|---|---|
+| today (bypass intact) | 54/59 |
+| grade everywhere, verdict decides outright | 46/59 |
+| grade everywhere, the two booleans veto above the band | 51/59 |
+| **grade everywhere, a value-scoped quote vetoes** | **57/59** |
+
+The two middle rows fail for the same reason: the veto is the product of two unreliable booleans.
+`question_touches_a_safety_topic` is true of most vehicle questions, and
+`passages_answer_the_question` false-negatives often enough that together they escalate questions the
+manual answers — `x55-16` (parking assist), and `fu-01`, the follow-up D20 had just fixed.
+
+**Why a quote works where a judgement does not.** "Does this answer the question" is the model's
+opinion and cannot be checked. "Copy the sentence stating the value" is an extraction, and Python can
+verify the result against the passages. A fabricated or hedged quote fails a substring test, so the
+routing depends on a fact rather than on trust — which serves D2 better than a boolean does.
+
+**Scoping it to value questions is what makes it safe, and that took two attempts.** Requiring a quote
+of *every* question broke procedures: a procedure has no single sentence carrying its answer, so an
+absent quote proves nothing, and `fu-01` and `x55-16` escalated. Scoped to value questions it broke
+nothing — but the first wording of `asks_for_a_specific_value` returned **False** for "what torque do
+I tighten the wheel nuts to?" on 2 of 3 runs, because the model read it as *"do the passages contain
+a value"*. That is the same confusion D17 had to fix for `question_is_about_the_domain`. Rewording it
+to judge the question alone, and saying outright that it still requires a value when the passages are
+silent, fixed it: `value=True` on all three runs.
+
+**Two rows changed label rather than being counted as regressions, on corpus evidence.** `x55-12`
+("how deep can I drive through water?") and `bj30-17` ("can I drive through water, and how deep?")
+both expected `manual`. Neither manual states a fording depth: the X55's page 168 says *"correctly
+estimate or find out the wading depth"* and gives no figure, and the BJ30 has a wading mode and depth
+**detection** but no maximum. A confident depth here is how an engine gets flooded, so `escalate` is
+the correct route and the labels were wrong — the same mistake `esc-06` carried, found the same way.
+`bj30-17` is a compound question whose "can I" half the manual does answer; that nuance is lost by
+routing the whole turn, and is recorded rather than resolved.
+
+**Cost.** Every question now pays a grader call. End-to-end average across two runs each side:
+2,805 and 2,494 ms before, 3,323 and 4,189 ms after — roughly **+1.1 s**, with enough variance between
+runs that it should be read as "about a second", not a figure to quote. It lands before the answer
+starts streaming, so a user feels all of it. Accepted for removing a class of confidently wrong safety
+answers.
+
+**Measured after, twice.** Routing **92% (54/59) → 97% (57/59)**, `escalate` **12/12** in both runs.
+The two remaining misroutes are `bj30-02`, the flaky row near the band, and `bj30-23`, the table
+serialisation D16 already ruled on. Neither is touched by this change.

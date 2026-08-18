@@ -3,6 +3,8 @@ Routing. A pure function over measured numbers; the grader supplies evidence, ne
 destination (D2). Bands and their derivation: docs/build-log.md, Slice 5.
 """
 
+import re
+
 from pydantic import BaseModel
 
 from app.config import (
@@ -22,6 +24,19 @@ class Verdict(BaseModel):
     passages_answer_the_question: bool
     question_is_about_the_domain: bool
     question_touches_a_safety_topic: bool
+    # A question demanding a number is the one kind of answerability Python can check, and
+    # the quote is what it checks (D22). Empty when the passages do not state one.
+    asks_for_a_specific_value: bool
+    answer_quote: str
+
+
+def quoted(verdict: Verdict, passages: list[dict]) -> bool:
+    """Whether the grader's quote is really in what it was shown. Whitespace and case are
+    ignored so a requoted line still matches; anything else must be verbatim."""
+    if not verdict.answer_quote:
+        return False
+    flat = re.sub(r"\s+", "", "".join(p["excerpt"][:600] for p in passages)).lower()
+    return re.sub(r"\s+", "", verdict.answer_quote).lower() in flat
 
 
 def decide(
@@ -29,6 +44,7 @@ def decide(
     verdict: Verdict | None,
     streak: int = 0,
     asks_for_person: bool = False,
+    quote_verified: bool = False,
 ) -> Route:
     """Pure. Above HIGH the manual answers; below LOW it does not; between, ask."""
     # Asking for a human is a request to honour, not one to talk someone out of (D14).
@@ -41,6 +57,18 @@ def decide(
         return "escalate"
 
     if top_score > GATE_HIGH:
+        # A high score means the manual discusses the subject, not that it states the number
+        # asked for — the two come apart exactly on specification questions (D19). Where a
+        # value is wanted, is a safety matter, and cannot be quoted from what was retrieved,
+        # the score is overruled. A procedure has no single sentence to quote, so this can
+        # only ever fire on a value question (D22).
+        if (
+            verdict is not None
+            and verdict.asks_for_a_specific_value
+            and verdict.question_touches_a_safety_topic
+            and not quote_verified
+        ):
+            return "escalate"
         return "manual"
 
     if verdict is None:
@@ -64,7 +92,18 @@ exists are all about the product.
 A question touches a safety topic when it is about one of the listed topics and someone could
 be hurt by acting on a wrong answer — including any request for a procedure, a limit or a
 specification used when working on one. It does not, when the question only asks what
-something costs, where to obtain it, who to contact, or whether an advisory exists."""
+something costs, where to obtain it, who to contact, or whether an advisory exists.
+
+`asks_for_a_specific_value` — read the question on its own and ignore the passages entirely
+when answering this one. Would a complete answer have to state a particular number, rating,
+capacity, grade or setting? "What torque", "what pressure", "how much", "how many", "how deep",
+"what grade" all require one, and they still require one when the passages happen not to state
+it — that the passages are silent is what the other fields are for. A question asking for a
+sequence of steps, or for an account of how something works, does not require one.
+
+When it does, copy into `answer_quote` the exact sentence or table row from the passages that
+states that value, word for word, so it can be checked against them. If nothing in the passages
+states it, leave `answer_quote` empty. Never write a sentence that is not there."""
 
 
 def grade(question: str, passages: list[dict]) -> Verdict:
@@ -84,6 +123,8 @@ def _trigger(ctx: PipelineContext, verdict: Verdict | None) -> str:
         return "The user asked to speak to a person"
     if ctx.unresolved_streak >= UNRESOLVED_ESCALATE:
         return f"Nothing resolved it across {ctx.unresolved_streak} turns"
+    if ctx.top_score > GATE_HIGH:
+        return "The manual covers this subject but does not state the value asked for"
     return "Safety-critical topic the manual does not cover"
 
 
@@ -91,12 +132,19 @@ class GateStep:
     name = "gate"
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
-        # Above HIGH no grader has ever been needed, so no call is made or announced.
-        verdict = None if ctx.top_score > GATE_HIGH else grade(ctx.query, ctx.passages)
-        if verdict is not None:
-            ctx.emit(self.name, "Checked whether the manual covers this")
+        # Graded on every question. The score alone cannot tell a manual that states a value
+        # from one that only discusses the subject, and that gap is where a confident wrong
+        # answer lives (D22).
+        verdict = grade(ctx.query, ctx.passages)
+        ctx.emit(self.name, "Checked whether the manual covers this")
 
-        ctx.route = decide(ctx.top_score, verdict, ctx.unresolved_streak, ctx.asks_for_person)
+        ctx.route = decide(
+            ctx.top_score,
+            verdict,
+            ctx.unresolved_streak,
+            ctx.asks_for_person,
+            quoted(verdict, ctx.passages),
+        )
         if ctx.route == "escalate":
             ctx.escalation_trigger = _trigger(ctx, verdict)
         return ctx

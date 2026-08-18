@@ -1381,3 +1381,105 @@ uv run --project backend --locked --no-sync python playground/check_grader_stabi
 - [ ] `esc-06` and `fu-03` — the `GATE_HIGH` bypass (D19), unchanged.
 - [ ] `bj30-23` — table serialisation (D16), unchanged.
 - [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.
+
+---
+
+## Slice 14 — the bypass closed with a checkable fact
+
+### Outcome
+
+The X55 no longer invents a wheel nut torque. Routing **92% (54/59) → 97% (57/59)**, twice, with
+`escalate` at **12/12** in both runs. The grader now runs on every question, and above `GATE_HIGH` it
+may overrule the score in exactly one situation: the question wants a specific value, the subject is a
+safety topic, and the value cannot be quoted from what was retrieved.
+
+### Three simpler policies were measured and rejected first
+
+D19 left this open with a plan to recalibrate `GATE_HIGH`, which D19 itself had already shown to be
+impossible. So each candidate was run 3 times over all 59 rows before any production code changed:
+
+| policy | fully right |
+|---|---|
+| today, bypass intact | 54/59 |
+| grade everywhere, the verdict decides outright | 46/59 |
+| grade everywhere, the two booleans veto above the band | 51/59 |
+| **grade everywhere, a value-scoped quote vetoes** | **57/59** |
+
+**Both middle policies are worse than doing nothing**, and for one reason: the veto is the product of
+two unreliable booleans. `question_touches_a_safety_topic` is true of most vehicle questions, and
+`passages_answer_the_question` false-negatives often enough that together they escalate questions the
+manual answers — `x55-16` (parking assist), `x55-12`, and `fu-01`, the follow-up Slice 12 had just
+fixed. Shipping either would have traded two rare dangerous misroutes for several common ones.
+
+### Why a quote succeeds where a judgement fails
+
+"Do these passages answer the question" is an opinion and cannot be checked. "Copy the sentence that
+states the value" is an extraction, and `quoted()` checks the result against the excerpts the grader
+was shown. A hedged or invented quote fails a substring test. The route then rests on a fact rather
+than on trust, which serves D2 better than a boolean does.
+
+### Two attempts to get there, both worth recording
+
+Requiring a quote of **every** question broke procedures — a procedure has no single sentence carrying
+its answer, so an absent quote proves nothing, and `fu-01` and `x55-16` escalated. Scoping it to value
+questions fixed that and broke nothing, but then fixed nothing either: the first wording of
+`asks_for_a_specific_value` returned **False** for "what torque do I tighten the wheel nuts to?" on 2
+of 3 runs. The model was reading it as *"do the passages contain a value"* — the same confusion D17
+had to correct for `question_is_about_the_domain`, met a third time. Rewording it to judge the
+question alone, and stating outright that it still wants a value when the passages are silent, took it
+to `value=True` 3/3.
+
+### Two more labels were wrong, found the same way as `esc-06`
+
+`x55-12` and `bj30-17` both ask how deep the vehicle can ford, and both expected `manual`. **Neither
+manual states a depth.** The X55's page 168 says *"correctly estimate or find out the wading depth"*
+and gives no figure; the BJ30 has a wading mode and depth **detection** but no maximum, and the quote
+it offered — *"the water depth detection system measures the water level"* — describes the feature,
+not a limit. A confident depth is how an engine gets flooded. Relabelled to `escalate` on that
+evidence rather than counted as regressions.
+
+That is now three labels corrected by reading the corpus instead of trusting the eval set. The pattern
+each time: the manual discusses a subject at length and never states the number, and a relevance
+score cannot tell the difference.
+
+`bj30-17` is a compound question — the manual does answer its "can I" half. Routing acts on the whole
+turn, so that nuance is lost; recorded in D22, not solved.
+
+### Cost
+
+Every question now pays a grader call. End to end: 2,805 and 2,494 ms before, 3,323 and 4,189 ms
+after — about **+1.1 s**, with enough run-to-run variance that it should be read as "about a second".
+It lands before the first token, so the user feels all of it. Accepted.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python playground/check_grader.py
+uv run --project backend --locked --no-sync python playground/check_quote_gate.py
+uv run --project backend --locked --no-sync python eval/run.py
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Routing accuracy | 92% (54/59) | **97% (57/59)**, twice |
+| `escalate` | 7/10 | **12/12** |
+| X55 "what torque for the wheel nuts" | `manual`, a fabricated figure | **`escalate`, with the reason** |
+| BJ30 "wheel nut torque specification" | `manual`, 110±10 N·m | unchanged |
+| Questions graded | 16/59 | 59/59 |
+| End to end | ~2.6 s | ~3.8 s |
+
+### Checkpoint
+
+- [x] A specification question the manual cannot answer hands off instead of inventing a number.
+- [x] The same question against the manual that *does* state it still answers, with the figure.
+- [x] The override cannot fire on a procedure, where an absent quote would prove nothing.
+- [x] The operator is told *which* rule fired, including this one.
+- [x] Measured twice; both runs 97% with the same two misroutes.
+- [ ] `bj30-23` — table serialisation (D16), unchanged and open.
+- [ ] `bj30-02` — flips near the band between runs. Grader instability, unchanged.
+- [ ] Compound questions are routed whole, so "can I, and how deep" loses its answerable half.
+- [ ] D4's context sentence — still the fix for `x55-08`'s retrieval, still `(not built)`.
+- [ ] Operator inbox — next.

@@ -14,12 +14,11 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
 from app.config import (  # noqa: E402
-    GATE_HIGH,
     RERANK_CANDIDATES,
     RERANK_KEEP,
     UNRESOLVED_ESCALATE,
 )
-from app.pipeline.gate import decide, grade  # noqa: E402
+from app.pipeline.gate import decide, grade, quoted  # noqa: E402
 from app.pipeline.resolve import next_streak, read  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
@@ -27,7 +26,7 @@ from app.providers.reranker import rank  # noqa: E402
 
 RUNS = 5
 FIELDS = ("passages_answer_the_question", "question_is_about_the_domain",
-          "question_touches_a_safety_topic")
+          "question_touches_a_safety_topic", "asks_for_a_specific_value")
 
 
 def main() -> None:
@@ -53,19 +52,20 @@ def main() -> None:
             for (_, excerpt), h in sorted(zip(scored, hits, strict=True), key=lambda p: -p[0][0])
         ]
         top = max(value for value, _ in scored)
-        # Only rows a grader actually decides: no shortcut, and no D14 trigger ahead of it.
-        if top <= GATE_HIGH and not asks_for_person and streak < UNRESOLVED_ESCALATE:
-            graded.append((row, query, ordered[:RERANK_KEEP], top))
+        # Every question is graded now (D22), so every row is measured — except those a D14
+        # trigger decides before the grader is consulted.
+        if not asks_for_person and streak < UNRESOLVED_ESCALATE:
+            graded.append((row, query, ordered[:RERANK_KEEP], top, streak))
 
-    print(f"{len(graded)} rows reach the grader; {RUNS} runs each\n")
+    print(f"{len(graded)} rows the grader can move; {RUNS} runs each\n")
     print(f"{'id':10} {'routes seen':38} {'stable':7} {'expected'}")
 
     flipping = 0
-    for row, query, passages, top in graded:
+    for row, query, passages, top, streak in graded:
         routes, flips = [], Counter()
         for _ in range(RUNS):
             verdict = grade(query, passages)
-            routes.append(decide(top, verdict))
+            routes.append(decide(top, verdict, streak, False, quoted(verdict, passages)))
             for field in FIELDS:
                 flips[field] += getattr(verdict, field)
         seen = Counter(routes)
