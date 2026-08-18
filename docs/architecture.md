@@ -256,6 +256,7 @@ handoff then resets the counter, or every later turn in the session would escala
 | `POST /sessions` | `{manual}` → a new session |
 | `GET /sessions` | history panel |
 | `GET /sessions/{id}` | one conversation with its messages and citations |
+| `DELETE /sessions/{id}` | removes the conversation, its messages and any handoff raised from it (D25) |
 | `POST /chat` | `{session_id, question}` → the stream below |
 | `GET /escalations` | operator inbox; optional `?status=open` |
 | `GET /escalations/{id}` | the full handoff package, transcript included |

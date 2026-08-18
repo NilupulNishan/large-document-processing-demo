@@ -147,6 +147,21 @@ def set_unresolved_streak(id: str, streak: int) -> None:
         db.execute("UPDATE sessions SET unresolved_streak = ? WHERE id = ?", (streak, id))
 
 
+def delete_session(id: str) -> dict:
+    """A conversation and everything hanging off it, in foreign-key order.
+
+    `messages` and `escalations` both reference `sessions` with no ON DELETE CASCADE, and
+    foreign keys are enforced, so the session row cannot go first. The handoff goes with the
+    conversation because `get_escalation` builds its package from the transcript — an
+    escalation outliving its messages is a card the operator cannot act on (D14).
+    """
+    with connect() as db:
+        messages = db.execute("DELETE FROM messages WHERE session_id = ?", (id,)).rowcount
+        handoffs = db.execute("DELETE FROM escalations WHERE session_id = ?", (id,)).rowcount
+        db.execute("DELETE FROM sessions WHERE id = ?", (id,))
+    return {"id": id, "messages": messages, "escalations": handoffs}
+
+
 def get_session(id: str) -> dict | None:
     with connect() as db:
         row = db.execute("SELECT * FROM sessions WHERE id = ?", (id,)).fetchone()

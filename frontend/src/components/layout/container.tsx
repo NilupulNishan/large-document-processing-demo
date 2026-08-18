@@ -6,7 +6,13 @@ import Sidebar from "./sidebar";
 import ChatPanel from "@/components/chat/chat-panel";
 import PdfViewer from "@/components/pdf/pdf-viewer";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { createSession, listManuals, listSessions, pdfUrl } from "@/lib/api";
+import {
+  createSession,
+  deleteSession,
+  listManuals,
+  listSessions,
+  pdfUrl,
+} from "@/lib/api";
 import type { Manual, SessionSummary } from "@/types/chat";
 
 export default function AppShell() {
@@ -61,6 +67,29 @@ export default function AppShell() {
     startSession(id);
   };
 
+  // Deleting the open conversation must land somewhere: the next most recent, or a fresh one
+  // on the same manual when that was the last.
+  const removeSession = useCallback(
+    async (id: string) => {
+      await deleteSession(id).catch(() => undefined);
+      const remaining = await listSessions().catch(() => []);
+      setSessions(remaining);
+
+      if (id !== sessionId) return;
+      const next = remaining.find((item) => item.id !== id);
+      if (next) {
+        setManualId(next.manual_id);
+        setSessionId(next.id);
+        setPage(1);
+      } else if (manualId) {
+        startSession(manualId);
+      } else {
+        setSessionId(null);
+      }
+    },
+    [sessionId, manualId, startSession],
+  );
+
   const selectSession = (id: string) => {
     const chosen = sessions.find((item) => item.id === id);
     if (!chosen) return;
@@ -90,6 +119,7 @@ export default function AppShell() {
           selectedSession={sessionId}
           onSelectManual={selectManual}
           onSelectSession={selectSession}
+          onDeleteSession={removeSession}
           onNewChat={() => manualId && startSession(manualId)}
         />
 

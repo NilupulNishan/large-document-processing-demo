@@ -1660,3 +1660,74 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [ ] The `suggested_next_step` wording drifts toward advice the transcript already rules out — it
       suggested checking the manual for a value the summary had just said is absent.
 - [ ] No presence, routing, multiple agents or agent auth. Say so when demonstrating it.
+
+---
+
+## Slice 17 — deleting a conversation
+
+### Outcome
+
+A conversation can be removed from the sidebar, taking its messages and any handoff raised from it.
+The store had accumulated **65 sessions** across demo runs with no way to clear one.
+
+### Two things in the schema pushed back
+
+`messages.session_id` and `escalations.session_id` both reference `sessions(id)`, foreign keys are
+enforced in `connect()`, and neither declares `ON DELETE CASCADE`. Deleting the session row first
+raises `IntegrityError` as soon as it has a message, so `delete_session()` goes messages → escalations
+→ session in one connection.
+
+The handoff goes with the conversation because `get_escalation` builds its package from
+`list_messages(session_id)`. An escalation outliving its transcript is a card the operator cannot act
+on — an empty package is worse than a missing one. Recorded in D25 with the cost: a user can delete a
+conversation an agent is part-way through.
+
+### A UI constraint worth noting
+
+The history row was a single `<button>` wrapping the title, and a delete control cannot be nested
+inside it — a button inside a button is invalid HTML and React warns about it. The row is now a `div`
+holding the select button and a trash button, revealed on hover and focus. Clicking the trash arms
+that row into a `Delete? Yes / No` state held in one piece of local state, so only one row is ever
+armed and no browser modal appears.
+
+### Where the view lands afterwards
+
+Deleting the **open** conversation cannot leave a blank pane. `removeSession` re-reads the list and
+moves to the most recently updated remaining session, or starts a fresh one on the same manual when
+that was the last. `startSession` and `refreshSessions` already existed and do both halves.
+
+### Verified against the constraint, not just the happy path
+
+A throwaway session with two messages and an escalation deleted cleanly — `{'messages': 2,
+'escalations': 1}` — with the session, its transcript and its handoff all gone afterwards and the
+other sessions untouched. Wrong ordering would have raised rather than failed quietly, which is why
+this was worth running before touching the UI.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | |
+|---|---|
+| Sessions in the store | 65, none removable |
+| `DELETE /sessions/{id}` | returns what it removed: messages and escalations |
+| Retrieval, routing, gate | untouched — `eval/run.py` not affected |
+| tsc, ESLint, production build | clean |
+
+### Checkpoint
+
+- [x] A conversation, its messages and its handoff are removed together.
+- [x] Foreign-key order verified against a session that had both.
+- [x] Deleting the open conversation moves to another rather than blanking.
+- [x] Deleting the last one starts a fresh conversation on the same manual.
+- [x] Two-step confirm, no browser dialog, only one row armed at a time.
+- [ ] **Not clicked in a browser yet** — the backend path is verified against the store and the build
+      passes, but the sidebar interaction has not been used.
+- [ ] No undo and no soft delete (D25).
+- [ ] An agent with that thread open sees their next poll 404; the hook swallows it and the view
+      simply stops updating rather than saying the conversation is gone.

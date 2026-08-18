@@ -25,10 +25,20 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return response.json();
 }
 
+async function del<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+
 export const listManuals = () => get<Manual[]>("/manuals");
 export const listSessions = () => get<SessionSummary[]>("/sessions");
 export const createSession = (manual: string) =>
   post<SessionSummary>("/sessions", { manual });
+
+/** Removes the conversation, its messages and any handoff raised from it. */
+export const deleteSession = (id: string) =>
+  del<{ id: string; messages: number; escalations: number }>(`/sessions/${id}`);
 
 export type StoredMessage = {
   id: string;

@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Inbox } from "lucide-react";
+import { Inbox, Trash2 } from "lucide-react";
 import type { Manual, SessionSummary } from "@/types/chat";
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
   selectedSession: string | null;
   onSelectManual: (id: string) => void;
   onSelectSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
   onNewChat: () => void;
 };
 
@@ -21,8 +23,11 @@ export default function Sidebar({
   selectedSession,
   onSelectManual,
   onSelectSession,
+  onDeleteSession,
   onNewChat,
 }: Props) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
   return (
     <aside className="hidden h-full w-72 shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 p-5 lg:flex">
       <div className="mb-6 px-1">
@@ -78,20 +83,64 @@ export default function Sidebar({
         {sessions.length === 0 ? (
           <p className="px-1 text-xs text-slate-400">Nothing yet.</p>
         ) : (
-          sessions.map((session) => (
-            <button
-              key={session.id}
-              onClick={() => onSelectSession(session.id)}
-              title={session.title}
-              className={`w-full rounded-lg px-3 py-2 text-left text-xs transition ${
-                session.id === selectedSession
-                  ? "bg-white font-semibold text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:bg-white hover:text-slate-800"
-              }`}
-            >
-              <span className="block truncate">{session.title}</span>
-            </button>
-          ))
+          sessions.map((session) => {
+            const armed = session.id === confirming;
+            return (
+              // A div, not a button: the delete control cannot be nested inside the select
+              // button, and a button inside a button is invalid HTML.
+              <div
+                key={session.id}
+                className={`group flex items-center rounded-lg transition ${
+                  session.id === selectedSession
+                    ? "bg-white shadow-sm"
+                    : "hover:bg-white"
+                }`}
+              >
+                {armed ? (
+                  <div className="flex w-full items-center gap-1 px-3 py-2">
+                    <span className="flex-1 truncate text-xs text-slate-500">Delete?</span>
+                    <button
+                      onClick={() => {
+                        setConfirming(null);
+                        onDeleteSession(session.id);
+                      }}
+                      className="rounded px-2 py-0.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="rounded px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => onSelectSession(session.id)}
+                      title={session.title}
+                      className={`min-w-0 flex-1 px-3 py-2 text-left text-xs transition ${
+                        session.id === selectedSession
+                          ? "font-semibold text-slate-900"
+                          : "text-slate-500 group-hover:text-slate-800"
+                      }`}
+                    >
+                      <span className="block truncate">{session.title}</span>
+                    </button>
+                    <button
+                      onClick={() => setConfirming(session.id)}
+                      aria-label={`Delete ${session.title}`}
+                      title="Delete this conversation"
+                      className="mr-1 rounded p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 

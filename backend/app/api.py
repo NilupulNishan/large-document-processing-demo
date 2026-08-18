@@ -95,6 +95,14 @@ def session(session_id: str) -> dict:
     return {**found, "messages": db.list_messages(session_id)}
 
 
+@app.delete("/sessions/{session_id}")
+def remove_session(session_id: str) -> dict:
+    """Deletes the conversation, its messages and any handoff raised from it."""
+    if db.get_session(session_id) is None:
+        raise HTTPException(404, "No such session")
+    return db.delete_session(session_id)
+
+
 @app.get("/escalations")
 def escalations(status: str | None = None) -> list[dict]:
     return db.list_escalations(status)

@@ -799,3 +799,30 @@ handing it back to the assistant is not built.
 **A trap this slice walked into and fixed.** `create_escalation` inserted positionally
 (`INSERT INTO escalations VALUES (...)`), so adding the two summary columns broke it — the same trap
 `create_session` had in D21. Both now name their columns.
+
+---
+
+## D25 — Deleting a conversation deletes its handoff with it
+
+**Decision.** `DELETE /sessions/{id}` removes the session's messages, then its escalations, then the
+session — in that order, in one connection. There is no soft delete and no undo.
+
+**Why that order.** `messages.session_id` and `escalations.session_id` both reference `sessions(id)`,
+`connect()` enables `PRAGMA foreign_keys = ON`, and neither declares `ON DELETE CASCADE`. Deleting the
+session first raises `sqlite3.IntegrityError` the moment it has a single message. Ordering is the whole
+implementation; getting it wrong fails loudly, which is the good case.
+
+**Why the handoff goes too.** `get_escalation` builds its package from `list_messages(session_id)`, so
+an escalation that outlives its transcript is a card an operator cannot act on — an empty package is a
+worse outcome than a missing one, and it breaks the promise D14 exists to make. Keeping the record
+would mean copying the transcript into the escalation at write time, which D12 explicitly decided
+against. So the record is removed and the card disappears from `/inbox`.
+
+**The cost, accepted.** A user can delete a conversation a human agent is part-way through answering.
+For a demo that is the right trade — it is the user's own conversation. A product with real agents
+would either block deletion while a handoff is open or archive instead, and that belongs with the
+helpdesk integration `AGENTS.md` keeps out of scope.
+
+**No undo.** A soft-delete flag would touch every session query for a feature whose only job is tidying
+a demo. The confirm is a two-step in the sidebar rather than a browser dialog, which is protection
+enough for the risk.
