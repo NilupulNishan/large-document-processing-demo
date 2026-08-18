@@ -72,6 +72,11 @@ One stage of 12, not D3's 100 → 30: Recall@10 over the fused candidates is 100
 longer tail costs latency and buys nothing measurable. Measured at ~1,249 ms on this laptop, not the
 ~300 ms D3 assumed — the largest single cost before the first token. See build-log Slice 5.
 
+A passage longer than the model's 512-token window is scored window by window and keeps its best
+(Slice 10). `rank()` returns that winning window alongside the score, and `RerankStep` carries it on
+each passage as `excerpt` — the span the score was actually measured on. The gate reads `excerpt`;
+the answer step reads the full `text`.
+
 **4 · gate** — Reads **cross-encoder** scores from step 3, never the RRF fusion scores from step 2.
 Fusion scores rank position rather than relevance, and measurably cannot separate a grounded question
 from a request for a poem (D3). The assistant does not dead-end: a weak manual result downgrades the
@@ -266,18 +271,22 @@ are solid and drive the pane, web pills are dashed and open a tab. Repeated page
  "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 44 rows cover three of the
-five: `manual` 38, `general` 4, `decline` 2. **`manual+general` and `escalate` have no labelled rows,
-so those two paths are unmeasured** — worth closing once `web_search` and `escalate` exist. `kind` is
-`procedure` 22, `spec` 6, `symptom` 5, `safety` 5, `absent` 4, `offtopic` 2, so weakness can be
-located rather than just observed. Pages are labelled from the source text, never from retrieval
-output.
+`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 53 rows cover four of the
+five: `manual` 40, `escalate` 7, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
+that path is unmeasured.** `kind` is `procedure` 22, `safety` 12, `spec` 8, `symptom` 5, `absent` 4,
+`offtopic` 2, so weakness can be located rather than just observed. Pages are labelled from the source
+text, never from retrieval output.
 
 `eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind, scoring fusion order
-against reranked order over the same candidates. It also prints each question's top reranker score
-against `GATE_HIGH` / `GATE_LOW`, which is how the bands were calibrated. End-to-end routing accuracy
-is **(not built)**: the harness stops at the score and never calls the grader or the answer step.
-Answer prose is never scored.
+against reranked order over the same candidates. It then reports **routing accuracy** for the gate
+exactly as it runs at query time — the grader is called only at or below `GATE_HIGH`, so a row that
+bypasses in production bypasses here — and lists every misroute with its score and band. The answer
+step is never called and answer prose is never scored.
+
+Two caveats on that number. The grader is not fully deterministic even at temperature 0, so rows
+sitting near `GATE_HIGH` can change route between runs (`bj30-16` is one); a single run is not proof.
+And accuracy counts misroutes equally when their costs are not equal — a safety question answered
+confidently from the manual is far worse than a covered question answered from general knowledge.
 
 ## Deliberate omissions
 

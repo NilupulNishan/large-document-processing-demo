@@ -4,7 +4,8 @@ Retrieval quality against eval/questions.jsonl. This is the test suite for this 
     uv run --project backend python eval/run.py
 
 Reports fusion order against reranked order over the same candidates, so the reranker's
-contribution is isolated. Routing accuracy is not reported yet — the gate does not exist.
+contribution is isolated, then routing accuracy for the gate exactly as it runs in
+production — the grader is called only below GATE_HIGH, as it is at query time.
 """
 
 import json
@@ -15,10 +16,11 @@ from pathlib import Path
 
 sys.path.append(str((REPO_ROOT := Path(__file__).resolve().parents[1]) / "backend"))
 
-from app.config import GATE_HIGH, GATE_LOW, RERANK_CANDIDATES  # noqa: E402
+from app.config import GATE_HIGH, GATE_LOW, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
+from app.pipeline.gate import decide, grade  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
-from app.providers.reranker import score  # noqa: E402
+from app.providers.reranker import rank  # noqa: E402
 
 QUESTIONS = Path(__file__).parent / "questions.jsonl"
 CUTOFFS = (1, 3, 5, 10)
@@ -26,10 +28,10 @@ CUTOFFS = (1, 3, 5, 10)
 
 def hit_rank(hits: list[dict], expected: set[int]) -> int | None:
     """1-based rank of the first chunk overlapping an expected page."""
-    for rank, hit in enumerate(hits, start=1):
+    for position, hit in enumerate(hits, start=1):
         # Printed numbers where a manual has a detected offset, PDF indices otherwise (D6).
         if expected & set(hit["pages_printed"] or hit["pages_pdf"]):
-            return rank
+            return position
     return None
 
 
@@ -49,13 +51,19 @@ def main() -> None:
         hits = search(
             row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
         )
-        scores = score(row["question"], [h["text"] for h in hits])
-        ordered = [h for _, h in sorted(zip(scores, hits, strict=True), key=lambda p: -p[0])]
+        scored = rank(row["question"], [h["text"] for h in hits])
+        ordered = [
+            h | {"excerpt": excerpt}
+            for (_, excerpt), h in sorted(zip(scored, hits, strict=True), key=lambda p: -p[0][0])
+        ]
 
         expected = set(row["expected_pages"])
         row["fusion_rank"] = hit_rank(hits, expected)
         row["rerank_rank"] = hit_rank(ordered, expected)
-        row["top_score"] = max(scores) if scores else 0.0
+        row["top_score"] = top = max((value for value, _ in scored), default=0.0)
+        # The gate as it runs at query time: above the band no grader is called (D2).
+        verdict = None if top > GATE_HIGH else grade(row["question"], ordered[:RERANK_KEEP])
+        row["route"] = decide(top, verdict)
 
     grounded = [r for r in rows if r["expected_pages"]]
 
@@ -78,15 +86,26 @@ def main() -> None:
     for f, k, row in sorted(worse, key=lambda t: t[1] - t[0], reverse=True)[:5]:
         print(f"  down {f}->{k}  {row['id']}  {row['question']}")
 
-    print("\nGate — top reranker score per question\n")
-    for row in rows:
-        if not row["expected_pages"]:
-            band = "HIGH" if row["top_score"] > GATE_HIGH else "grader"
-            band = "LOW" if row["top_score"] < GATE_LOW else band
-            print(f"  {row['id']}  {row['top_score']:+7.2f}  {band:6} {row['expected_route']}")
+    print("\nRouting\n")
+    misrouted = [r for r in rows if r["route"] != r["expected_route"]]
+    for row in misrouted:
+        band = "HIGH" if row["top_score"] > GATE_HIGH else "grader"
+        print(
+            f"  {row['id']:10} {row['top_score']:+7.2f} {band:6} "
+            f"got {row['route']:14} want {row['expected_route']}"
+        )
 
-    in_band = [r for r in grounded if GATE_LOW <= r["top_score"] <= GATE_HIGH]
-    print(f"\n  grounded needing a grader call: {len(in_band)}/{len(grounded)}")
+    correct = len(rows) - len(misrouted)
+    print(f"\n  routing accuracy {correct / len(rows):.0%}  ({correct}/{len(rows)})")
+
+    by_route: dict[str, list[bool]] = defaultdict(list)
+    for row in rows:
+        by_route[row["expected_route"]].append(row["route"] == row["expected_route"])
+    for route, results in sorted(by_route.items()):
+        print(f"    {route:16} {sum(results)}/{len(results)}")
+
+    graded = [r for r in rows if r["top_score"] <= GATE_HIGH]
+    print(f"\n  reached the grader: {len(graded)}/{len(rows)}")
     print(f"  bands GATE_HIGH {GATE_HIGH:+.2f}  GATE_LOW {GATE_LOW:+.2f}")
     print(f"\n{(time.perf_counter() - started) / len(rows) * 1000:.0f} ms per question end to end")
 

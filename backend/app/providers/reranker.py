@@ -36,12 +36,14 @@ def _model():
     return tokenizer, model
 
 
-def score(query: str, passages: list[str]) -> list[float]:
+def rank(query: str, passages: list[str]) -> list[tuple[float, str]]:
     """
     Relevance of each passage to the query, judged jointly. Higher is better.
 
     A passage longer than the model's window is scored by its best window, not its first.
     Spec tables run to thousands of tokens and the answer is rarely in the opening rows.
+    Returns that winning window's text with each score — it is the span the score was
+    measured on, and the only part of a long passage the gate has evidence about.
     """
     if not passages:
         return []
@@ -55,13 +57,28 @@ def score(query: str, passages: list[str]) -> list[float]:
         max_length=RERANK_MAX_TOKENS,
         stride=RERANK_WINDOW_OVERLAP,
         return_overflowing_tokens=True,
+        return_offsets_mapping=True,
         return_tensors="np",
     )
     # One row per window; this maps each back to the passage it came from.
     windows = inputs.pop("overflow_to_sample_mapping")
+    # Char spans into the passage, so a window can be cut back out of the original text.
+    offsets = inputs.pop("offset_mapping")
+    types = inputs["token_type_ids"]
     logits = model(**inputs).logits
 
-    best = [float("-inf")] * len(passages)
-    for row, passage in zip(logits, windows, strict=True):
-        best[passage] = max(best[passage], float(row[0]))
+    best = [(float("-inf"), "")] * len(passages)
+    for row, passage, offset, kind in zip(logits, windows, offsets, types, strict=True):
+        value = float(row[0])
+        if value <= best[passage][0]:
+            continue
+        # token_type_ids marks the passage half; (0, 0) spans are specials and padding.
+        spans = [o for o, t in zip(offset, kind, strict=True) if t == 1 and o[1] > o[0]]
+        text = passages[passage][spans[0][0] : spans[-1][1]] if spans else passages[passage]
+        best[passage] = (value, text)
     return best
+
+
+def score(query: str, passages: list[str]) -> list[float]:
+    """Scores alone, for callers that do not need the window text."""
+    return [value for value, _ in rank(query, passages)]

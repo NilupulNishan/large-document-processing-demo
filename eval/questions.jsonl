@@ -47,6 +47,7 @@
 {"id": "esc-03", "question": "What is the maximum tongue weight on the tow bar?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "esc-04", "question": "Where are the reinforced jacking points for a two-post lift?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "esc-05", "question": "What is the isolation resistance spec for the high-voltage battery pack?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
-{"id": "esc-06", "question": "What is the wheel nut torque specification?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
+{"id": "esc-06", "question": "What torque do I tighten the wheel nuts to?", "manual": "baic-x55-ii-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "esc-07", "question": "Can I fit a towbar myself and what wiring does it need?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [], "expected_route": "escalate", "kind": "safety"}
 {"id": "bj30-23", "question": "What is the maximum trailer weight I can tow?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [272, 273, 274, 275], "expected_route": "manual", "kind": "spec"}
+{"id": "bj30-24", "question": "What is the wheel nut torque specification?", "manual": "baic-bj30-e30-owner-manual-en", "expected_pages": [245, 246, 247], "expected_route": "manual", "kind": "spec"}

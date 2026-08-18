@@ -496,3 +496,56 @@ escalation is worse than a spurious one, so that trade was rejected.
 **Measured after.** Route instability **4/15 → 0/15**, and misroutes across the 52-row set **6 → 3**.
 The three that remain are `bj30-23` and `bj30-02` — both table lookups, neither fixed by changing the
 table format — and `esc-06`, which scores −2.07 and never reaches the grader at all.
+
+---
+
+## D18 — The gate judges the span its score came from, at the same character budget
+
+**Decision.** `rank()` returns each passage's best-scoring window alongside its score. `RerankStep`
+carries it as `excerpt`; `grade()` reads `excerpt[:600]` where it previously read `text[:600]`. The
+answer step still reads the full `text`.
+
+**Why.** D16 fixed the *reranker* so a long passage is scored by its best window rather than its first
+512 tokens. The grader was left reading the first 600 characters. For the BJ30 towing chunk — 9,543
+characters — those two spans describe different subjects: the score came from the window holding
+`Total mass of quasi-trailer (T), BJ6470X52MHEV = 1.5` at character 5,202, while the grader was shown
+wheel-alignment rows from character 0. The gate was therefore scoring one span and judging another.
+
+**The full window was tried first and is worse.** Handing the grader the whole winning window (~10,000
+characters across six passages instead of 3,600) flipped the one question the corpus genuinely cannot
+answer — "what torque do I tighten the wheel nuts to?" on the X55, which contains no torque figure
+anywhere — from `escalate` to `manual` in **5 of 5 runs**. More text reads as more coverage. Capping
+at the original 600 characters keeps that question at `escalate` 5/5.
+
+**Measured after.** Over five runs of seven decisive rows, `excerpt[:600]` against `text[:600]`:
+identical on five, `bj30-02` steadier (4/5 → 5/5), `x55-08` wrong either way but failing to `escalate`
+rather than `general`. **It did not change the misroute count.** It is kept because the gate now
+judges the text its own score was measured on, and because the cost is zero — same budget, same
+tokens — not because the numbers improved. `playground/check_evidence.py` reproduces the comparison.
+
+---
+
+## D19 — `esc-06` tested the opposite of its intent; the bypass, not the band, is the safety hole
+
+**Decision.** `esc-06` now asks the X55 for a wheel nut torque. The BJ30 version of the question
+became `bj30-24`, expecting `manual` on pages 245–247.
+
+**Why.** `esc-06` was written to represent "a fastener torque the manual does not contain", and Slice
+10 recorded that neither manual holds one. That is not true of the BJ30: it states **"all wheel nuts
+are tightened to 110±10 N·m"** on printed pages 245–247, and it is the only torque figure in either
+corpus. The row expected `escalate` from a manual that answers the question, so the gate routing it to
+`manual` was correct and the label was wrong. The grader agrees the passages answer it, 5/5.
+
+The X55 has no torque figure anywhere, so it carries the question the row was meant to ask.
+
+**What that exposes.** The intended failure was never being measured. Asked of the X55, the question
+scores **+3.29** — above `GATE_HIGH`, so no grader is called and it routes to `manual`. Graded, it
+routes to `escalate` 5/5. The grader is right; it is simply never consulted.
+
+**No threshold closes this.** Correct `manual` rows span −7.21 to +9.29, and this question sits at
++3.29 in the middle of them. `GATE_HIGH` cannot be raised past it without sending most of the corpus
+to the grader. The cross-encoder measures whether the manual *discusses* a topic, not whether it
+*states the value asked for*, and those come apart precisely on specification questions — the class
+where a confident wrong answer does the most damage. Recalibrating the band, which Slice 10 proposed,
+would not have worked. The remaining options are to call the grader on every question (+1.6 s on the
+37 of 53 rows that currently bypass, and `x55-08` regresses) or to accept the gap. **Open.**

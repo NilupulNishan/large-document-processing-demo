@@ -48,7 +48,7 @@ something costs, where to obtain it, who to contact, or whether an advisory exis
 
 
 def grade(question: str, passages: list[dict]) -> Verdict:
-    excerpts = "\n\n".join(f"[{i}] {p['text'][:600]}" for i, p in enumerate(passages, 1))
+    excerpts = "\n\n".join(f"[{i}] {p['excerpt'][:600]}" for i, p in enumerate(passages, 1))
     topics = ", ".join(SAFETY_TOPICS) or "none configured"
     return complete(
         _SYSTEM,

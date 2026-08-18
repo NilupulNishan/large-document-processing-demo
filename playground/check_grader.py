@@ -16,7 +16,7 @@ from app.config import GATE_HIGH, RERANK_CANDIDATES, RERANK_KEEP  # noqa: E402
 from app.pipeline.gate import decide, grade  # noqa: E402
 from app.providers.azure_openai import embed_query  # noqa: E402
 from app.providers.lancedb_store import search  # noqa: E402
-from app.providers.reranker import score  # noqa: E402
+from app.providers.reranker import rank  # noqa: E402
 
 QUESTIONS = Path(REPO_ROOT) / "eval" / "questions.jsonl"
 
@@ -32,9 +32,12 @@ def main() -> None:
         hits = search(
             row["manual"], row["question"], embed_query(row["question"]), limit=RERANK_CANDIDATES
         )
-        scores = score(row["question"], [h["text"] for h in hits])
-        ordered = [h for _, h in sorted(zip(scores, hits, strict=True), key=lambda p: -p[0])]
-        top = max(scores)
+        scored = rank(row["question"], [h["text"] for h in hits])
+        ordered = [
+            h | {"excerpt": excerpt}
+            for (_, excerpt), h in sorted(zip(scored, hits, strict=True), key=lambda p: -p[0][0])
+        ]
+        top = max(value for value, _ in scored)
 
         verdict = grade(row["question"], ordered[:RERANK_KEEP])
         # What routing would give if the grader always ran.

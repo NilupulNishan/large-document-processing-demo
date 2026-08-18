@@ -1058,3 +1058,104 @@ reject it on evidence rather than argument. `--reparse` forces the models to run
       not answering the question. Neither table format fixed it.
 - [ ] `esc-06` scores −2.07 and never reaches the grader. `GATE_HIGH` was calibrated on positives only.
 - [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.
+
+---
+
+## Slice 11 — what the gate is shown, and what the eval was measuring
+
+### Outcome
+
+Routing accuracy is now part of `eval/run.py` rather than a claim in `AGENTS.md`, the grader judges
+the span its own score was measured on, and the eval's one safety-specification row was found to be
+testing the opposite of what it intended. Routing accuracy is **94% (50/53)**.
+
+### Why the order
+
+Slice 10 closed with two open misroutes and a plan to recalibrate `GATE_HIGH`. Both turned out to be
+different problems than recorded, and neither is fixed by moving the band. Verifying that first was
+only possible because the harness could not measure routing at all — `AGENTS.md` said `eval/run.py`
+reported routing accuracy; `eval/run.py`'s own docstring said the gate did not exist yet. Neither was
+true. That went in first, because every claim below depends on it.
+
+### Corrections to Slice 10
+
+**"Neither manual contains a fastener torque anywhere" is wrong.** The BJ30 states *"all wheel nuts
+are tightened to 110±10 N·m"* on printed pages 245–247 — the only torque figure in either corpus, and
+exactly the one `esc-06` asked for. The row expected `escalate` from a manual that answers the
+question. The gate was right and the label was wrong, so `esc-06` was never a misroute.
+
+It is now the X55 form of the same question, which the corpus genuinely cannot answer; the BJ30 form
+became `bj30-24`, expecting `manual`. Slice 10's "misroutes 6 → 2" was really 6 → 1 plus a bad label.
+
+**`bj30-23` is not a truncation problem.** The grader was reading character 0–600 of a 9,543-character
+table while the answer sat at character 5,202, which looked like the whole explanation. Fixing that
+did not move the row: with the correct span in front of it, the grader still judges `Total mass of
+quasi-trailer (T), BJ6470X52MHEV = 1.5` as not answering "what is the maximum trailer weight I can
+tow", 5 runs out of 5. The serialisation is the obstacle, and D16 already measured that neither table
+format fixes it. Still open, and now open for the right reason.
+
+### The gate was scoring one span and judging another
+
+D16 fixed the reranker to score a long passage by its best window. The grader kept reading the head of
+the passage. For the towing chunk those are different subjects entirely — the score came from the
+trailer rows, the verdict from wheel-alignment rows.
+
+Handing the grader the full winning window was the obvious fix and is the wrong one. At ~10,000
+characters over six passages it flipped the X55 torque question from `escalate` to `manual` 5/5 —
+more text reads as more coverage, and that is the one question the corpus cannot answer. Capped back
+to the original 600 characters it holds `escalate` 5/5. Kept at `excerpt[:600]`: same budget, same
+tokens, and the gate now judges the text its score came from. It did not change the misroute count,
+which is recorded in D18 rather than dressed up as a win.
+
+### The bypass, not the band, is the safety hole
+
+Asked of the X55, "what torque do I tighten the wheel nuts to?" scores **+3.29**. Above `GATE_HIGH`,
+so no grader runs and it answers from the manual — the confidently wrong safety answer this system is
+built to avoid. Graded, it escalates 5/5. The grader is right and is never consulted.
+
+Slice 10 proposed recalibrating `GATE_HIGH`. That cannot work. Correct `manual` rows run from −7.21 to
++9.29 and this question sits at +3.29 among them; no threshold separates them, because the
+cross-encoder measures whether the manual *discusses* a topic, not whether it *states the value
+asked for*. Those come apart exactly on specification questions.
+
+Always calling the grader does fix it, and costs: **+1.6 s** on the 37 of 53 rows that currently
+bypass, and `x55-08` regresses from `manual` to `general`. Those two misroutes are not equal in cost —
+one is a wrong torque figure, the other is a covered question answered without citations — so this is
+a product call, not an accuracy-count call. Left open in D19 rather than decided quietly.
+
+### The harness is not as stable as the numbers suggest
+
+`bj30-16` appeared as a new misroute and is not one — it scores −4.51, just under `GATE_HIGH`, and
+routes `manual` 5/5 when measured directly. It flips between runs. Slice 10 took instability from
+4/15 to 0/15 on the rows it sampled; it is not 0 across the whole set. A single `eval/run.py` routing
+number should not be read to the row.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+uv run --project backend --locked --no-sync python playground/check_evidence.py
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Routing accuracy | not measured | **94% (50/53)** |
+| Recall@1 / MRR | 85% / 0.902 | 85% / 0.905 |
+| `spec` Recall@1 | 86% (n=7) | 88% (n=8) |
+| Real misroutes | 2 claimed | **2** (`esc-06` X55, `bj30-23`) + 1 flaky |
+| X55 torque question | `manual`, unmeasured | `manual`, **measured and labelled** |
+
+### Checkpoint
+
+- [x] The eval harness measures routing, as `AGENTS.md` always claimed it did.
+- [x] The gate judges the span its score was measured on.
+- [x] The one question the corpus cannot answer is in the eval set, with the right label.
+- [x] `esc-06`'s original label corrected; `bj30-24` added for the answerable form.
+- [ ] `bj30-23` — the grader reads the trailer row and still says it does not answer. Serialisation,
+      not truncation; D16 already ruled out both table formats.
+- [ ] The `GATE_HIGH` bypass lets an unanswerable specification question through as `manual`. No
+      threshold closes it; always grading costs 1.6 s and one regression. Decision open (D19).
+- [ ] Operator inbox — the record exists and the endpoints serve it; nothing renders it yet.
