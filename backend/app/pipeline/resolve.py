@@ -18,6 +18,7 @@ class Rewrite(BaseModel):
     """Observations about the turn. Nothing here chooses a route or an escalation (D14)."""
 
     standalone_question: str
+    carries_a_question: bool
     asks_for_a_person: bool
     progress: Literal["reports_failure", "confirms_success", "new_topic", "unclear"]
 
@@ -29,10 +30,16 @@ quickly. Their latest message may be mistyped, elliptical, a report of progress,
 reference to something earlier — "what about the rear ones", "done, what now", "it still is
 not working".
 
-Rewrite it into a question someone could answer without having seen the conversation. Name
-the task or component it concerns, taking that from the earlier questions: a rewrite that
-asks "what should I do next" without naming what is being done has failed. Where the latest
-message reports progress, the rewrite asks for the next step of that named task.
+`carries_a_question` — whether they are actually asking for something. "Thanks", "ok", "that
+worked", "got it" and a bare greeting are not asking anything. Decide this before anything
+else, and when it is false copy the message into `standalone_question` unchanged and stop:
+inventing a question they did not ask is worse than answering nothing.
+
+When they are asking something, rewrite it into a question someone could answer without having
+seen the conversation. Name the task or component it concerns, taking that from the earlier
+questions: a rewrite that asks "what should I do next" without naming what is being done has
+failed. Where the message reports progress and then asks something, the rewrite asks for the
+next step of that named task.
 
 Keep their intent. Do not answer it, do not add specifics they did not give, and do not
 invent a topic. If the message already stands on its own, return it unchanged.
@@ -45,7 +52,7 @@ where one is, is not asking for a person.
 
 `progress` — how their message relates to what they were last told:
   reports_failure   they tried it and it did not work, or the problem is still there
-  confirms_success  they say it worked, or that the problem is resolved
+  confirms_success  they say it worked, the problem is resolved, or they simply thank you
   new_topic         they have moved on to a different subject
   unclear           none of these, including a plain next question on the same subject"""
 
@@ -84,11 +91,16 @@ class ResolveQueryStep:
             return ctx
 
         turn = read(ctx.question, ctx.history)
+        ctx.asks_for_person = turn.asks_for_a_person
+        ctx.unresolved_streak = next_streak(ctx.unresolved_streak, turn.progress)
+        ctx.emit(self.name, "Read the conversation so far")
+
+        # Nothing was asked, so nothing is searched. Ending the turn here is what stops a
+        # rewrite inventing a question out of "thanks" and answering it (D26).
+        if not turn.carries_a_question and not turn.asks_for_a_person:
+            ctx.route = "acknowledge"
+            return ctx
+
         # Concatenated rather than replaced: the user's own wording still feeds BM25.
         ctx.query = f"{turn.standalone_question} {ctx.question}"
-        ctx.asks_for_person = turn.asks_for_a_person
-
-        ctx.unresolved_streak = next_streak(ctx.unresolved_streak, turn.progress)
-
-        ctx.emit(self.name, "Read the conversation so far")
         return ctx

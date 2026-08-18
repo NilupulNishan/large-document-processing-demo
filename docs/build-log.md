@@ -1731,3 +1731,98 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [ ] No undo and no soft delete (D25).
 - [ ] An agent with that thread open sees their next poll 404; the hook swallows it and the view
       simply stops updating rather than saying the conversation is gone.
+
+---
+
+## Slice 18 — a conversation stops being treated as one long question about the vehicle
+
+### Outcome
+
+"What can you do" no longer hands the user to a human, "thanks" no longer invents a question and
+answers it, and a greeting gets an introduction instead of a refusal. Routing **97% (59/61)** with
+two new rows covering the behaviour.
+
+### What was typed into the running demo
+
+```
+'what can you do'   score -4.10  ROUTE=escalate   domain=True  safety=True
+'thanks!'           rewritten to "What should I do next after changing the flat tyre?"  ROUTE=manual
+'Hi who are you'    score -8.27  ROUTE=decline    "That is outside what I can help with."
+```
+
+The reported symptom was the first. The second is worse and had not been noticed: the user typed
+**"thanks!"** and the system answered a question they never asked, from the manual, with citations.
+
+### The invented question was this log's own instruction
+
+D20 says a rewrite that asks "what should I do next" without naming what is being done has failed.
+That was the right correction for a follow-up that dropped its subject — Slice 12 measured it moving
+the reported case from `escalate` to `manual`. It is the wrong instruction for a message with no
+subject, because it is not asking anything. The prompt now decides **whether** something is being
+asked before deciding **what**, and `carries_a_question` ends the turn when nothing is.
+
+Worth stating plainly: a fix that measured well six slices ago caused a worse bug in a case its
+measurements never covered. The eval set had no conversational turns in it at all.
+
+### One field removed the escalation
+
+The grader called "what can you do" `domain=True` and `safety=True`. The safety value came from the
+passages retrieval happened to land on — "Parking brake:" — rather than from the question. But
+`decide()` tests `question_is_about_the_domain` before the safety branch, so correcting that one
+field was the entire fix. The wording keeps costs, where-to-obtain and who-to-contact in domain,
+because `gen-02` and the decline rows turn on that same clause.
+
+**That was the regression risk, and it held: `general` 4/4, `decline` 3/3.**
+
+### A route that ends a turn before anything is searched
+
+`acknowledge` is set by `resolve_query` and honoured by one-line guards in `retrieve`, `rerank` and
+`gate`. `web_search` already guarded on the route and needed nothing, and `build_pipeline()` is
+untouched. Measured on the turn itself:
+
+```
+'thanks!'   route=acknowledge   steps=['resolve_query', 'answer']
+```
+
+No search, no grader call, no answer call — the cheapest turn the system has.
+
+### Two replies that a model never writes
+
+Both are fixed strings. A model asked to describe its own capabilities invents some, and an assistant
+overstating what it can do is exactly the unverifiable claim D13 exists to stop. The decline copy has
+to serve a greeting, a question about the assistant and a genuinely off-topic question, so it leads
+with what the assistant does and closes with the boundary.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| "what can you do" | `escalate`, with a reference number | **`decline`**, with an introduction |
+| "thanks!" | a fabricated question answered from the manual | **`acknowledge`**, nothing searched |
+| "Hi who are you" | "That is outside what I can help with." | the same introduction |
+| Routing accuracy | 97% (57/59) | **97% (59/61)** |
+| `general` / `decline` | 4/4 · 2/2 | **4/4 · 3/3** |
+| Conversational rows in the harness | 0 | 2 |
+
+### Checkpoint
+
+- [x] A question about the assistant routes to `decline`, never to a human.
+- [x] A turn that asks nothing is acknowledged without searching, grading or answering.
+- [x] "thanks" resets the escalation streak instead of reading as `unclear`.
+- [x] Both replies are fixed strings, never model output.
+- [x] The domain rewording left `general` and `decline` intact — the stated regression risk.
+- [ ] `question_touches_a_safety_topic` still takes its value partly from the retrieved passages
+      rather than the question. Masked here because the domain check runs first; it is the same
+      field that flips between identical runs, and it belongs with the grader instability.
+- [ ] A bare "hi" as the **first** message still reaches retrieval, because `resolve_query` only
+      runs when there is history.
+- [ ] `bj30-17` and `bj30-23` unchanged and open. The misroute set moved again between runs — every
+      figure here is ±2 rows.

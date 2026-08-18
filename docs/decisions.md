@@ -826,3 +826,45 @@ helpdesk integration `AGENTS.md` keeps out of scope.
 **No undo.** A soft-delete flag would touch every session query for a feature whose only job is tidying
 a demo. The confirm is a two-step in the sidebar rather than a browser dialog, which is protection
 enough for the risk.
+
+---
+
+## D26 — A turn that asks nothing is answered without searching anything
+
+**Decision.** `Rewrite` gains `carries_a_question`. When a follow-up asks nothing — "thanks", "ok",
+"got it" — `ResolveQueryStep` sets `ctx.route = "acknowledge"` and the turn ends there.
+`RetrieveStep`, `RerankStep` and `GateStep` return immediately when `ctx.route` is already set.
+`AnswerStep` writes a fixed line, as it already does for `decline`. A question about the assistant
+itself is now out of domain, and the `decline` copy introduces the assistant rather than only
+refusing.
+
+**Why.** Typed into the running demo: **"what can you do" was handed to a human as safety-critical**,
+and **"thanks!" was rewritten into "What should I do next after changing the flat tyre?" and answered
+from the manual** — a question the user never asked, answered confidently with citations.
+
+**The invented question is D20's prompt working exactly as written.** It says a rewrite that asks
+"what should I do next" without naming what is being done has failed. That was the right correction
+for a follow-up that dropped its subject, and it is the wrong instruction for a message that has no
+subject because it is not asking anything. The prompt now decides *whether* something is being asked
+before deciding *what*.
+
+**One field fixed the escalation.** The grader marked "what can you do" as `domain=True` and
+`safety=True`. The safety value came from the passages retrieval happened to land on — "Parking
+brake:" — not from the question. But `decide()` checks `question_is_about_the_domain` before the
+safety branch, so making that field correct removes the escalation without touching anything else.
+The wording keeps costs, where-to-obtain and who-to-contact in domain, because `gen-02` and the
+`decline` rows depend on that clause.
+
+**Both replies are fixed strings in Python.** A model asked to describe its own capabilities will
+invent some, and an assistant overstating what it can do is the unverifiable claim D13 exists to
+stop. The `decline` text serves a greeting, a question about the assistant and a genuinely off-topic
+question, so it leads with what the assistant does and closes with the boundary.
+
+**A new `Route`, not a new orchestrator.** `acknowledge` is set by a step and honoured by guards in
+the three steps that would otherwise do work. `build_pipeline()` is untouched, as `AGENTS.md`
+requires. The turn costs no search, no grader call and no answer call.
+
+**Still open, and masked rather than fixed.** `question_touches_a_safety_topic` is influenced by the
+retrieved passages instead of the question alone. Here the domain check runs first so it does not
+matter, but it is the same field that flips between identical runs. It belongs with the grader
+instability, which remains the largest open correctness risk.

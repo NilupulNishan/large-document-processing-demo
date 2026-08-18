@@ -11,6 +11,9 @@ class RetrieveStep:
     name = "retrieve"
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
+        # An earlier step already ended the turn; searching would be work nobody asked for.
+        if ctx.route:
+            return ctx
         ctx.query = ctx.query or ctx.question
         ctx.candidates = search(
             ctx.manual, ctx.query, embed_query(ctx.query), limit=RERANK_CANDIDATES
@@ -23,7 +26,7 @@ class RerankStep:
     name = "rerank"
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
-        if not ctx.candidates:
+        if ctx.route or not ctx.candidates:
             return ctx
 
         scored = rank(ctx.query, [c["text"] for c in ctx.candidates])

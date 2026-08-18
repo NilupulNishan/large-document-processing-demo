@@ -51,14 +51,22 @@ def main() -> None:
     for row in rows:
         # Mirrors ResolveQueryStep: a row with history is rewritten before anything searches,
         # and the same call reports D14's two observations (D20).
-        query, asks_for_person = row["question"], False
+        query, asks_for_person, asked = row["question"], False, True
         streak = row.get("streak", 0)
         if row.get("history"):
             turn = read(row["question"], row["history"])
             query = f"{turn.standalone_question} {row['question']}"
             asks_for_person = turn.asks_for_a_person
+            asked = turn.carries_a_question
             streak = next_streak(streak, turn.progress)
         row["query"] = query
+
+        # Mirrors ResolveQueryStep: a turn that asks nothing ends before retrieval (D26).
+        if not asked and not asks_for_person:
+            row["fusion_rank"] = row["rerank_rank"] = None
+            row["top_score"] = 0.0
+            row["route"] = "acknowledge"
+            continue
 
         hits = search(row["manual"], query, embed_query(query), limit=RERANK_CANDIDATES)
         scored = rank(query, [h["text"] for h in hits])

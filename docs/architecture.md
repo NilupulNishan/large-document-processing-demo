@@ -65,9 +65,14 @@ rewrite must name the task it concerns; "what should I do next" without naming w
 retrieves nothing, which is how it first failed (D20). Everything downstream reads `ctx.query`, so
 retrieval, the grader and the answer all see the resolved question.
 
-The same call reports two things for D14 without costing another: whether the user asked for a
-person, and whether the turn reports a failure, confirms success or changes subject. It observes;
-`next_streak()` counts and `decide()` routes.
+The same call reports three things without costing another: whether the turn **carries a question**
+at all, whether the user asked for a person, and whether the turn reports a failure, confirms success
+or changes subject. It observes; `next_streak()` counts and Python routes.
+
+A turn that asks nothing — "thanks", "ok", "got it" — ends here with `route = "acknowledge"`, and
+`retrieve`, `rerank` and `gate` each return immediately when a route is already set. That turn costs
+no search, no grader call and no answer call. Without it the rewrite invents a question out of
+"thanks" and the manual answers it (D26).
 
 **2 · retrieve** — Hybrid search in LanceDB scoped to the session's manual: BM25 full-text and dense
 vector in parallel, fused with Reciprocal Rank Fusion at k=60. Returns 12 candidates carrying page
@@ -99,7 +104,8 @@ Each route fixes what the user is shown, and `source` is assigned in Python from
 | `manual` | `manual` | pages |
 | `manual+general` | `manual+general` | pages, with the gaps marked in prose |
 | `general` | `general` | web results, behind a "not covered by your manual" line |
-| `decline` | `general` | none — one short refusal |
+| `decline` | `general` | none — an introduction to what the assistant does, then the boundary |
+| `acknowledge` | `general` | none — a fixed line; set by `resolve_query`, never by `decide()` (D26) |
 | `escalate` | — | a handoff record; no answer is written at all |
 
 The override is deliberately narrow. It fires only where the answer is a **specific value**, so it can

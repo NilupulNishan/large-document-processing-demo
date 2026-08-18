@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-Route = Literal["manual", "manual+general", "general", "decline", "escalate"]
+# `acknowledge` is set by resolve_query for a turn that asks nothing, and ends it there (D26).
+Route = Literal["manual", "manual+general", "general", "decline", "escalate", "acknowledge"]
 Source = Literal["manual", "manual+general", "general"]
 
 

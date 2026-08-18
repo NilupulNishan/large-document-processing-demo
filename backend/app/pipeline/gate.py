@@ -89,6 +89,10 @@ Whether the question is about the domain is about its subject, not about whether
 cover it. What something costs, where to obtain it, who to contact and whether an advisory
 exists are all about the product.
 
+A question about **you** is not: who or what you are, whether you are a person, what you can
+do, how you work. Those are about the assistant, not about the product, however much the
+passages happen to resemble the words used.
+
 A question touches a safety topic when it is about one of the listed topics and someone could
 be hurt by acting on a wrong answer — including any request for a procedure, a limit or a
 specification used when working on one. It does not, when the question only asks what
@@ -132,6 +136,10 @@ class GateStep:
     name = "gate"
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
+        # Already decided before retrieval, so there is nothing to grade.
+        if ctx.route:
+            return ctx
+
         # Graded on every question. The score alone cannot tell a manual that states a value
         # from one that only discusses the subject, and that gap is where a confident wrong
         # answer lives (D22).
