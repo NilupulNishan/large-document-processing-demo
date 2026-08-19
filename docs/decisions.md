@@ -1057,3 +1057,55 @@ across three runs.
 **99%, 95%, 95%**. Four rows flap between runs — `bj30-17`, `esc-02`, `meta-01`, `meta-06`. The
 instability is ±3 rows, not the ±2 previously logged, and a single run cannot support a headline
 number. Quote the range.
+
+---
+
+## D32 — "Grader instability" is four sources, and the obvious fix made routing worse
+
+**Decision.** Keep a rebuilt stability census in `playground/`. Change no production code. The
+prompt fix this slice was built to try was measured and **reverted**.
+
+**Why the name was wrong.** Three runs of identical code returned 99%, 95%, 95%. Measured over 5 runs
+× 74 rows, attributing each flip to the stage that produced it:
+
+| source | evidence |
+|---|---|
+| the grader's booleans | 3/74 rows route-unstable with query, passages and score held fixed |
+| the **turn classifier** | `meta-06` is unstable end to end but not in the grader pass |
+| the **rewrite** | 8 rows produced more than one standalone question at temperature 0 |
+| the **content filter** | trips intermittently on `bj30-17` and `bj30-08`, so `read()` sometimes returns `None` and the raw question is searched |
+
+Only the first is the grader. The label had been carried since Slice 12 and pointed at the last model
+call in the chain rather than at what was measured.
+
+**`seed` is unavailable.** Eight runs with and without `seed`, on a row known to flip, gave identical
+variance (`{True: 1, False: 7}` both ways) and `system_fingerprint` came back `None` — the deployment
+ignores it. **Temperature-0 calls flip a boolean roughly 1 in 8 and there is no API setting that
+stops it.** Majority-voting the grader would cut that, and is rejected: `AGENTS.md` caps query-time
+model calls at the four the architecture documents, and three grader calls adds ~3 s to every
+question.
+
+**The fix that looked certain, and the numbers that killed it.** The prompt defines every `Verdict`
+field except `passages_answer_the_question`, and two fields carry an explicit "read the question, not
+the passages" instruction. Those two were the stable ones — `question_is_about_the_domain` flipped on
+**0** rows, `asks_for_a_specific_value` on 1 — while `question_touches_a_safety_topic`, which carries
+no such instruction, flipped on **9**. That is the hypothesis logged since Slice 18, with a control
+group. Giving the safety field the same instruction did exactly what it was supposed to:
+
+```
+safety flips        9 rows -> 5        route-unstable rows   3/74 -> 2/74
+passages_answer     4 rows -> 0        total field flips     14 -> 11
+```
+
+And routing got **worse**: headline 99/95/95 → 95/95/92, `escalate` 12/12→9/12 at worst,
+`general` 4/4→3/4, and two rows that had never failed — `esc-03` and `x55-12` — began to.
+
+**The lesson is the deliverable.** `bj30-17` did stabilise: stably `manual`, which is the wrong
+answer. **A flapping error became a consistent one, and the stability metric scored that as
+progress.** Stability is not correctness, the census measures only the former, and no stability
+number may be used as a proxy for the latter. This is why the revert criteria were written before the
+numbers were seen.
+
+**Cost accepted.** The instability stands, now bounded and attributed rather than guessed at. The
+next attempt has to be judged on `eval/run.py` across three runs, with the census as a secondary
+signal only.

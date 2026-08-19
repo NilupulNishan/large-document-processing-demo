@@ -2224,3 +2224,99 @@ uv run --project backend --locked --no-sync python eval/run.py   # run three tim
       This now outranks everything else on correctness.
 - [ ] `meta-01` sits exactly on `GATE_HIGH` (-4.10), so its route turns on a tie.
 - [ ] `bj30-23` unchanged and open — the only consistent failure left.
+
+---
+
+## Slice 23 — what actually flips between runs, and a fix that did not survive its own measurement
+
+### Outcome
+
+A rebuilt stability census, a decomposition of what had been filed as "grader instability" since
+Slice 12, and **a reverted change**. No production code shipped. `playground/check_grader_stability.py`
+is the only file changed.
+
+### Four sources, one of them the grader
+
+The old script mirrored the pre-D28 resolve step, so it measured a pipeline two slices out of date,
+and it held query, passages and score fixed — by construction it could only ever blame the grader.
+Rebuilt with two passes, 5 runs × 74 rows:
+
+| source | evidence |
+|---|---|
+| the grader's booleans | 3/74 rows unstable with query, passages and score fixed |
+| the turn classifier | `meta-06` unstable end to end, stable in the grader pass |
+| the rewrite | 8 rows produced more than one standalone question at temperature 0 |
+| the content filter | trips intermittently, so `read()` sometimes returns `None` |
+
+`x55-12` was also found unstable and had never been on the known-flapper list, so the set is five
+rows, not four.
+
+### `seed` is ignored by this deployment
+
+```
+no seed   passages_answer_the_question {True: 1, False: 7}   system_fingerprint=None
+seed=7    passages_answer_the_question {False: 7, True: 1}   system_fingerprint=None
+```
+
+Eight runs each. Identical variance, no fingerprint. **Temperature-0 calls flip a boolean roughly 1
+in 8 and no API setting stops it.** Majority-voting was rejected against `AGENTS.md`'s cap on
+query-time model calls.
+
+### The fix that had a control group and still failed
+
+The prompt gives every `Verdict` field an explicit definition except `passages_answer_the_question`,
+and two fields are told to read the question and ignore the passages. **Those two were the stable
+ones** — `question_is_about_the_domain` flipped on 0 rows, `asks_for_a_specific_value` on 1 — while
+`question_touches_a_safety_topic`, carrying no such instruction, flipped on 9. That is the hypothesis
+this log has carried since Slice 18, with a control group behind it.
+
+Giving the safety field the same instruction did what it was designed to do:
+
+```
+safety flips      9 rows -> 5      route-unstable   3/74 -> 2/74
+passages_answer   4 rows -> 0      field flips      14 -> 11
+```
+
+Routing got worse:
+
+| | before, 3 runs | after, 3 runs |
+|---|---|---|
+| headline | 99% · 95% · 95% | **95% · 95% · 92%** |
+| `escalate` | 12/12 · 10/12 · 10/12 | 10/12 · 10/12 · **9/12** |
+| `general` | 4/4 · 4/4 · 4/4 | 4/4 · 4/4 · **3/4** |
+| `decline` | 5/5 · 4/5 · 4/5 | 4/5 · 4/5 · 4/5 |
+| `manual` | 45/46 | 45/46 |
+
+`esc-03` and `x55-12` began failing having never failed before. Three of the five categories named as
+must-hold did not hold. **Reverted.**
+
+### Why it failed, which is the thing worth keeping
+
+`bj30-17` did stabilise — stably `manual`, which is the wrong answer. **A flapping error became a
+consistent one and the stability metric scored that as progress.** Stability is not correctness. The
+census measures only the former and must never again be read as a proxy for the latter.
+
+The revert criteria were written into the plan before any number was seen, which is the only reason
+this was caught rather than argued around: the census looked like a clear win in isolation.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync python playground/check_grader_stability.py               # both passes, ~40 min
+uv run --project backend --locked --no-sync python playground/check_grader_stability.py --grader-only # ~13 min
+uv run --project backend --locked --no-sync python eval/run.py                                        # three times
+```
+
+### Checkpoint
+
+- [x] The census mirrors the pipeline that actually runs, and separates grader flips from the rest.
+- [x] "Grader instability" is decomposed into four sources with evidence for each.
+- [x] `seed` ruled out by measurement, not assumption; voting ruled out against the call budget.
+- [x] The prompt fix was measured against the eval and reverted when it failed.
+- [ ] **The instability stands.** Bounded and attributed, not reduced. Roughly 1-in-8 boolean flips
+      are a property of the deployment.
+- [ ] Any future attempt must be judged on `eval/run.py` across three runs. The census is a secondary
+      signal and it disagreed with the eval this time.
+- [ ] `bj30-17` is consistently wrong, not unstable — the grader quotes a value where the manual
+      states no wading depth. A grader-content defect, and its own slice.
+- [ ] `bj30-23` unchanged.
