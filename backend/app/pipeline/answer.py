@@ -60,15 +60,15 @@ Previously told to them:
 # can produce (D13). The UI badge is not enough — it does not survive copy and paste.
 _NOT_IN_MANUAL = "This is not covered by your manual, so here is general guidance instead.\n\n"
 
-# Serves a greeting, a question about the assistant, and a genuinely off-topic question, so it
-# leads with what it does and closes with the boundary.
-_INTRODUCTION = (
+# Shared by the opening greeting and the refusal, so the two cannot drift apart (D29).
+_WHAT_I_DO = (
     "I answer questions about {domain}. I look things up in the manual you have selected and "
     "show you the page an answer came from, I tell you plainly when the manual does not cover "
-    "something, and I pass a safety-critical gap to a person rather than guessing.\n\n"
-    "That particular question is outside what I can help with."
+    "something, and I pass a safety-critical gap to a person rather than guessing."
 )
 
+_GREETING = _WHAT_I_DO + "\n\nWhat would you like to know?"
+_DECLINED = _WHAT_I_DO + "\n\nThat particular question is outside what I can help with."
 _ACKNOWLEDGED = "Glad that helped. Ask me anything else about your manual whenever you need to."
 
 
@@ -114,15 +114,16 @@ class AnswerStep:
         # Both replies below are fixed strings, not model output. Asked to describe its own
         # limits, a model invents some — the unverifiable claim D13 exists to stop (D26).
         if ctx.route == "acknowledge":
-            ctx.token(_ACKNOWLEDGED)
-            ctx.answer = Answer(
-                format="direct", source="general", answer=_ACKNOWLEDGED, resolved=True
-            )
+            # An opening "hi" has nothing to be glad about yet, so it gets the introduction
+            # instead. Same route, two replies, chosen on history rather than a model (D29).
+            reply = _ACKNOWLEDGED if ctx.history else _GREETING.format(domain=DOMAIN_DESCRIPTION)
+            ctx.token(reply)
+            ctx.answer = Answer(format="direct", source="general", answer=reply, resolved=True)
             ctx.emit(self.name, "Nothing to look up")
             return ctx
 
         if ctx.route == "decline":
-            refusal = _INTRODUCTION.format(domain=DOMAIN_DESCRIPTION)
+            refusal = _DECLINED.format(domain=DOMAIN_DESCRIPTION)
             ctx.token(refusal)
             ctx.answer = Answer(
                 format="direct", source="general", answer=refusal, resolved=True

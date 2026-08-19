@@ -2045,3 +2045,74 @@ uv run --project backend --locked --no-sync python eval/run.py   # run twice
 - [ ] `answer.py`, `escalate.py` and `gate.py` still raise on a content filter trip. Unmeasured, and
       their exposure did not change here — but `x55-12` proves the filter fires on this corpus.
 - [ ] `bj30-23` and `noise-05` unchanged and open.
+
+---
+
+## Slice 21 — the opening greeting gets an introduction, not "Glad that helped"
+
+### Outcome
+
+The reply to a bare `hi` now says what the assistant does and invites a question. One file,
+`answer.py`. No route, prompt or threshold changed.
+
+### The bug D28 created
+
+D28 got the route right and left the reply wrong:
+
+```
+'hi'  →  acknowledge  →  "Glad that helped. Ask me anything else about your manual whenever you need to."
+```
+
+Nothing had helped. The user had not asked for anything yet. And `decline`'s copy is no better on a
+greeting — it closes with *"That particular question is outside what I can help with"*, answering a
+question nobody asked. Two routes, neither with a sensible reply to the most common opening message
+a demo receives.
+
+### The signal was already on the context
+
+Two different situations reach `acknowledge`: an opening greeting, and a "thanks" after being helped.
+What separates them is whether anything came before — `ctx.history`, which D28 already keys the
+rewrite on.
+
+```python
+reply = _ACKNOWLEDGED if ctx.history else _GREETING.format(domain=DOMAIN_DESCRIPTION)
+```
+
+`_WHAT_I_DO` is now shared between `_GREETING` and the `decline` copy rather than duplicated, so the
+description of the assistant cannot drift between the two places it appears.
+
+**No new route.** A third `Route` would have to be threaded through `decide()`, the guards in
+`retrieve`, `rerank` and `gate`, and the frontend, to choose between two constants. **No model call**
+— a model asked to greet someone invents capabilities, which is what D13 exists to stop.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+```
+
+**The eval was not run, deliberately.** This touches neither ingestion, retrieval, reranking nor the
+gate, and `eval/run.py` never invokes `AnswerStep` — it scores routes and retrieval only. Running it
+would burn ~6 minutes to reprint 96%.
+
+### Observed
+
+Rendered from the code, with `DOMAIN_DESCRIPTION="vehicle owner manuals"`:
+
+| turn | before | after |
+|---|---|---|
+| `hi`, first message | "Glad that helped." | **"I answer questions about vehicle owner manuals… What would you like to know?"** |
+| `thanks`, after help | "Glad that helped." | unchanged |
+| off-topic question | "…outside what I can help with." | unchanged |
+
+### Checkpoint
+
+- [x] An opening greeting is introduced to rather than thanked.
+- [x] Mid-conversation "thanks" is unchanged.
+- [x] `decline` copy unchanged, and now shares one description of the assistant with the greeting.
+- [x] Still two fixed strings; no model writes either.
+- [ ] A greeting on turn 5 gets "Glad that helped", and a "thanks" as the opening message gets the
+      introduction. Both are the wrong half of the pair and both are harmless. Telling them apart
+      needs the classifier to report *which kind* of nothing was asked.
+- [ ] Reply text is not scored by anything. The harness measures routes and retrieval; copy is
+      verified by reading it.

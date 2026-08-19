@@ -952,3 +952,35 @@ per question.
 **4 `True` / 2 `False` over 6 runs at temperature 0**, so `meta-06` flaps between `decline` and
 `acknowledge`. `hi` and `hello?` are 6/6 stable. Sharpening the prompt for the mixed case needs its
 own before/after and is not done here.
+
+---
+
+## D29 — `acknowledge` has two replies, chosen on history
+
+**Decision.** The `acknowledge` route writes `_GREETING` when `ctx.history` is empty and
+`_ACKNOWLEDGED` otherwise. Both are fixed strings. `_WHAT_I_DO` is now shared between `_GREETING` and
+the `decline` copy instead of being duplicated.
+
+**Why.** D28 made a bare `hi` reach `acknowledge`, whose reply is *"Glad that helped."* — nothing had
+helped yet, because the user had not asked for anything. The route was right and the reply was not.
+`decline`'s copy is no better on an opening greeting: it ends *"That particular question is outside
+what I can help with"*, which answers a question nobody asked.
+
+The two situations that reach `acknowledge` are genuinely different — an opening greeting, and a
+"thanks" or "ok" after being helped — and the thing that separates them is whether anything came
+before. That is `ctx.history`, already on the context and already the signal D28 keys the rewrite on.
+
+**Not a new route, and not a model call.** A third `Route` would have to be threaded through
+`decide()`, the guards in `retrieve`, `rerank` and `gate`, and the frontend's route handling, to pick
+between two constants. A model asked to greet someone would invent capabilities, which is the
+unverifiable claim D13 exists to stop and the reason both strings are fixed in the first place (D26).
+
+**A greeting mid-conversation gets "Glad that helped", and a "thanks" as the very first message gets
+the introduction.** Both are the wrong half of the pair, both are harmless, and distinguishing them
+needs the classifier to report *which kind* of nothing was asked — a prompt change measured against
+an eval set that does not score reply text. Not worth it.
+
+**Not measured by the harness, and it cannot be.** `eval/run.py` never invokes `AnswerStep`; it scores
+routes and retrieval only. Nothing here touches ingestion, retrieval, reranking or the gate, so the
+eval was not re-run — it would report identical numbers. Verified by rendering all three strings and
+by walking it in the browser.
