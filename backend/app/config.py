@@ -39,11 +39,13 @@ RERANK_MAX_TOKENS = 512
 RERANK_WINDOW_OVERLAP = 128
 
 # Gate bands, read off the reranker score distribution: observed ungrounded max -4.44,
-# grounded min -7.21. Set outside those, not on them — pinned to the exact extremes, the
+# grounded min -7.65. Set outside those, not on them — pinned to the exact extremes, the
 # lowest grounded question falls below LOW and gets declined. Widening only costs a
 # grader call; narrowing misroutes. Between the bands the grader decides (D2).
+# LOW re-derived when D30 changed what a first turn is searched with: the grounded minimum
+# moved -7.21 -> -7.65, so the band moved with it rather than the rule bending (D31).
 GATE_HIGH = -4.1
-GATE_LOW = -7.5
+GATE_LOW = -7.85
 
 # Turns in a row that resolved nothing before the question goes to a person (D14). A starting
 # value, not a finding — it is one number precisely so it can be tuned without touching code.

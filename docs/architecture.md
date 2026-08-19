@@ -61,8 +61,10 @@ assembles them in order. Adding a capability means adding a step. All seven are 
 **1 · resolve_query** — Reads every turn, first or not: whether it carries a question at all is a
 property of the message, so it is checked without history (D28). If the turn is a follow-up, also
 rewrite it into a standalone question using the last ~6 user turns, then concatenate the rewrite with
-the raw question so the user's own wording still feeds BM25. A first turn is searched with the words
-the user typed — no rewrite. If Azure's content filter rejects the call, the turn carries on unread.
+the raw question so the user's own wording still feeds BM25. On a first turn the rewrite *replaces*
+the question instead of being added to it — there the rewrite corrects a mistyping rather than
+restoring a missing subject, so keeping the original re-adds the noise (D30). If Azure's content
+filter rejects the call, the turn carries on unread and the raw question is searched.
 The rewrite must name the task it concerns; "what should I do next" without naming what is being done
 retrieves nothing, which is how it first failed (D20). Everything downstream reads `ctx.query`, so
 retrieval, the grader and the answer all see the resolved question.

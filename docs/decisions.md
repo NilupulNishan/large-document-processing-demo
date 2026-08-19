@@ -984,3 +984,76 @@ an eval set that does not score reply text. Not worth it.
 routes and retrieval only. Nothing here touches ingestion, retrieval, reranking or the gate, so the
 eval was not re-run — it would report identical numbers. Verified by rendering all three strings and
 by walking it in the browser.
+
+---
+
+## D30 — A follow-up's rewrite is added to the question; a first turn's replaces it
+
+**Decision.** `ctx.query = f"{standalone} {question}"` when there is history, `ctx.query = standalone`
+when there is not.
+
+**Why.** `noise-05` — `"wat torqe for the whel nuts"` — retrieved the right page **first** and was then
+scored `-10.51` by the cross-encoder, below `GATE_LOW`, so a torque figure the manual states was
+routed to `manual+general` and padded with a web search. Its clean twin `bj30-24` scores `-2.07`.
+**Noise degrades the gate's confidence, not the retriever's ranking**, which is the opposite of what
+we assumed: the `noisy` rows score Recall@1 100%, MRR 1.000, better than the clean corpus average.
+
+The correction was already being computed and thrown away. Since D28 the resolve call runs on every
+turn, so a cleaned-up form of a first-turn question exists before anything searches. D28 deliberately
+did not use it — that was blast-radius containment for a slice about greetings, and this is the
+measurement it deferred.
+
+**Concatenation is right for a follow-up and wrong for a first turn, measured three ways:**
+
+| row | raw | rewrite alone | rewrite + raw |
+|---|---|---|---|
+| `noise-05` | -10.51 below LOW | **-1.02 HIGH** | -4.30 mid |
+| `noise-01` | -6.85 mid | **+3.19 HIGH** | -1.27 HIGH |
+| `bj30-24` clean | -2.07 | **-2.07 identical** | -3.65 |
+| `bj30-03` clean | -2.05 | -2.18 | **-3.93** |
+
+D20 concatenates because an elliptical follow-up's rewrite *restores a missing subject* and the user's
+own words still feed BM25. A first turn is already complete, so its rewrite *corrects* rather than
+restores — keeping the original re-adds the very noise that was removed (`-4.30` against `-1.02`) and
+penalises clean rows by duplicating them, pushing `bj30-03` to `-3.93` against a `-4.10` threshold.
+
+**Cheap, because the call already happens.** No new model call, no new context field, no latency
+change. For 41 of 62 first-turn rows the rewrite is byte-identical to the question.
+
+**Cost accepted.** 18 of 62 first-turn rows change, most cosmetically. Two gain words that were not
+there — `bj30-11` becomes "Where can I find the VIN **on this product**?" and `bj30-17` gains "is it
+safe". Neither changed a route. Retrieval improved: Recall@1 **83% → 85%**, MRR **0.889 → 0.900**, and
+the `safety` kind went **@1 80% → 100%**.
+
+---
+
+## D31 — `GATE_LOW` re-derived from the distribution D30 created, not tuned to rescue a row
+
+**Decision.** `GATE_LOW` moves `-7.50 → -7.85`.
+
+**Why.** D30 changed what a first turn is searched with, so it changed the score distribution the
+bands were read off. `bj30-02` — *"What engine oil does it take and how many litres?"* — is the row the
+original band was calibrated against: `config.py` recorded "grounded min -7.21… set outside those, not
+on them", and `-7.50` was that value plus 0.29 of headroom. Its rewrite scores `-7.65` and consumed
+the headroom, dropping it to `manual+general`.
+
+**This is the rule being applied, not bent.** The grounded minimum moved `-7.21 → -7.65`; the band
+moves with it and keeps the same kind of margin. The alternative — leaving `-7.50` — pins the band to
+a number the distribution no longer contains, which is precisely what the original comment warns
+against.
+
+**It is not the same as tuning a threshold to fix "hi".** There the score was *honest and high*
+(the manual documents a wiper setting named `HI`), so no threshold could separate it from a real
+question and D28 rejected that fix. Here the distribution genuinely moved and the band is derived
+from it.
+
+**Measured margin, and why it is wider than it looks.** After D30, `bj30-02` at `-7.65` is the **only**
+grounded row below `-7.50`. The next rows down are `esc-05` (-8.03), `dec-02` (-8.17) and `esc-03`
+(-8.40), all ungrounded — and `GATE_LOW` cannot affect them, because it is only read when the grader
+has already said the passages answer the question. `manual` went **44/46 → 45/46** and held there
+across three runs.
+
+**What this exposed, and it matters more than the fix.** Three runs of identical code returned
+**99%, 95%, 95%**. Four rows flap between runs — `bj30-17`, `esc-02`, `meta-01`, `meta-06`. The
+instability is ±3 rows, not the ±2 previously logged, and a single run cannot support a headline
+number. Quote the range.

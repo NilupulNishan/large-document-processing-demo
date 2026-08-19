@@ -2116,3 +2116,111 @@ Rendered from the code, with `DOMAIN_DESCRIPTION="vehicle owner manuals"`:
       needs the classifier to report *which kind* of nothing was asked.
 - [ ] Reply text is not scored by anything. The harness measures routes and retrieval; copy is
       verified by reading it.
+
+---
+
+## Slice 22 — a first turn is searched with the question the user meant
+
+### Outcome
+
+`noise-05` and `bj30-02` both fixed; `manual` **44/46 → 45/46**, stable across three runs. Retrieval
+improved: Recall@1 **83% → 85%**, MRR **0.889 → 0.900**, and the `safety` kind went **@1 80% → 100%**.
+The headline is **95–99%** and the spread is the more important number.
+
+### Retrieval was never the problem
+
+`noise-05` — `"wat torqe for the whel nuts"` — ranked the right page **first**, then scored `-10.51`,
+below `GATE_LOW`. Its clean twin `bj30-24` scores `-2.07`. The `noisy` rows score Recall@1 100%,
+MRR 1.000, *better* than the clean corpus average.
+
+**Noise degrades the gate's confidence, not the retriever's ranking.** The fix therefore had to change
+what the scorer is shown, not how retrieval works.
+
+### The correction was already being computed and thrown away
+
+Since D28 the resolve call runs on every turn. A cleaned-up first-turn question existed before
+anything searched; D28 deliberately did not use it, as blast-radius containment. Measured three ways
+before changing anything:
+
+| row | raw | rewrite alone | rewrite + raw |
+|---|---|---|---|
+| `noise-05` | -10.51 below LOW | **-1.02 HIGH** | -4.30 mid |
+| `noise-01` | -6.85 mid | **+3.19 HIGH** | -1.27 HIGH |
+| `bj30-24` clean | -2.07 | **-2.07 identical** | -3.65 |
+| `bj30-03` clean | -2.05 | -2.18 | **-3.93** |
+
+D20's concatenation is right for a follow-up, where the rewrite restores a missing subject. It is
+wrong for a first turn, where the rewrite *corrects* one: keeping the original re-adds the noise
+(`-4.30` vs `-1.02`) and penalises clean rows by duplicating them — `bj30-03` fell to `-3.93` against
+a `-4.10` threshold. So the rewrite replaces on a first turn and is added to on a follow-up.
+
+41 of 62 first-turn rows come back byte-identical. No new call, no new field, no latency change.
+
+### The change broke the row the band was calibrated on
+
+First run: `noise-05` fixed, and **`bj30-02` broken** — deterministically, in both runs.
+
+```
+bj30-02  raw      -7.21  mid        'What engine oil does it take and how many litres?'
+bj30-02  rewrite  -7.65  below LOW  'What engine oil does it take, and how many litres are needed?'
+```
+
+`-7.21` is the exact number `config.py` records as the grounded minimum the bands were read off, with
+`GATE_LOW = -7.50` set 0.29 outside it. The rewrite cost 0.44 and consumed the headroom. **The
+distribution moved, so the band moved with it** — `-7.85`, re-derived by the rule already written in
+that comment (D31). After D30 `bj30-02` is the only grounded row below `-7.50`; the next rows down
+are all ungrounded, and `GATE_LOW` cannot affect them because it is only read once the grader has
+said the passages answer the question.
+
+This is not the threshold tuning D28 rejected for `hi`. There the score was honest and high, so no
+threshold could separate a greeting from a real question. Here the queries changed, so the
+distribution changed.
+
+### Three runs of identical code, and this is the finding to keep
+
+```
+run 3   99% (73/74)   bj30-23
+run 4   95% (70/74)   bj30-17  esc-02  bj30-23  meta-01
+run 5   95% (70/74)   bj30-17  esc-02  bj30-23  meta-06
+```
+
+**Four rows flap: `bj30-17`, `esc-02`, `meta-01`, `meta-06`.** The instability is ±3 rows, not the ±2
+logged since Slice 12, and the 99% was the outlier rather than the result. `meta-01` scores exactly
+`-4.10` — sitting on `GATE_HIGH` — which is its own latent problem.
+
+Stable in all three: `manual` 45/46, `bj30-23` the only consistent failure, both `noise-05` and
+`bj30-02` fixed.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py   # run three times
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| `noise-05` | `manual+general` (-10.51) | **`manual`** |
+| `bj30-02` | `manual` (-7.21) | **`manual`** (via D31) |
+| `manual` | 44/46 | **45/46**, all three runs |
+| Recall@1 / MRR, reranked | 83% / 0.889 | **85% / 0.900** |
+| `safety` kind, @1 / MRR | 80% / 0.900 | **100% / 1.000** |
+| `GATE_LOW` | -7.50 | **-7.85** |
+| Routing accuracy | 95–96% | **95–99%** |
+| Rows known to flap | 2 | **4** |
+
+### Checkpoint
+
+- [x] A mistyped first question is searched, scored and answered as the question the user meant.
+- [x] Follow-ups still concatenate — `fu-01`..`fu-04` unchanged.
+- [x] `manual` improved and held across three runs, the stated regression risk.
+- [x] `GATE_LOW` re-derived by the rule that set it, with the margin written down.
+- [ ] **The reranker's noise sensitivity is routed around, not fixed.** A correctly-retrieved passage
+      scoring -10.51 against a misspelled query is the underlying weakness; cleaning the query hides
+      it. Do not claim noise is solved.
+- [ ] **±3 rows, and a 5-point headline swing on identical code.** No single run supports a number.
+      This now outranks everything else on correctness.
+- [ ] `meta-01` sits exactly on `GATE_HIGH` (-4.10), so its route turns on a tie.
+- [ ] `bj30-23` unchanged and open — the only consistent failure left.

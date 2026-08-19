@@ -106,9 +106,9 @@ class ResolveQueryStep:
             ctx.route = "acknowledge"
             return ctx
 
-        # Only a follow-up has anything to resolve against, and leaving ctx.query unset on a
-        # first turn is what keeps every grounded query byte-identical (D28). Concatenated
-        # rather than replaced: the user's own wording still feeds BM25.
-        if ctx.history:
-            ctx.query = f"{turn.standalone_question} {ctx.question}"
+        # A follow-up's raw turn is elliptical, so the rewrite adds the subject back and both
+        # are kept for BM25 (D20). A first turn is already complete but may be mistyped, so
+        # the rewrite replaces it — keeping the original re-adds the noise it removed (D30).
+        standalone = turn.standalone_question
+        ctx.query = f"{standalone} {ctx.question}" if ctx.history else standalone
         return ctx

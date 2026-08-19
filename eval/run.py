@@ -59,8 +59,11 @@ def main() -> None:
             asks_for_person = turn.asks_for_a_person
             asked = turn.carries_a_question
             streak = next_streak(streak, turn.progress)
-            if row.get("history"):
-                query = f"{turn.standalone_question} {row['question']}"
+            query = (
+                f"{turn.standalone_question} {row['question']}"
+                if row.get("history")
+                else turn.standalone_question
+            )
         row["query"] = query
 
         # Mirrors ResolveQueryStep: a turn that asks nothing ends before retrieval (D26).
