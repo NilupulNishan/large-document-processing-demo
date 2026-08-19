@@ -58,10 +58,12 @@ Each step is a class in `backend/app/pipeline/` with one `run(ctx)` method. `bui
 assembles them in order. Adding a capability means adding a step. All seven are built;
 `build_pipeline()` returns them in this order.
 
-**1 · resolve_query** — If the turn is a follow-up, rewrite it into a standalone question using the
-last ~6 user turns, then concatenate the rewrite with the raw question so the user's own wording still
-feeds BM25. If there is no history, pass through untouched — no model call and no step event. The
-rewrite must name the task it concerns; "what should I do next" without naming what is being done
+**1 · resolve_query** — Reads every turn, first or not: whether it carries a question at all is a
+property of the message, so it is checked without history (D28). If the turn is a follow-up, also
+rewrite it into a standalone question using the last ~6 user turns, then concatenate the rewrite with
+the raw question so the user's own wording still feeds BM25. A first turn is searched with the words
+the user typed — no rewrite. If Azure's content filter rejects the call, the turn carries on unread.
+The rewrite must name the task it concerns; "what should I do next" without naming what is being done
 retrieves nothing, which is how it first failed (D20). Everything downstream reads `ctx.query`, so
 retrieval, the grader and the answer all see the resolved question.
 
@@ -176,8 +178,9 @@ flowchart LR
     w --> db
 ```
 
-A first turn has no history, so `resolve_query` makes no call and the left branch does not run; the
-counter can still move on the right, from an answer that was not grounded in the manual.
+A first turn runs the left branch too — it starts from a streak of 0, so it takes three turns to
+reach the threshold either way. The counter can also move on the right, from an answer that was not
+grounded in the manual.
 
 Neither band decides whether the grader is called — since D22 it always is. `GATE_HIGH` decides how
 much authority the verdict has: above it only a missing, quotable value overrides the score. `GATE_LOW`
@@ -283,8 +286,9 @@ carries no `source` and no citations, because it is a handoff rather than an ans
 Plus `event: error`, because a stream that dies silently is indistinguishable from one still thinking.
 
 Step events describe work that actually happened. No invented stages, no artificial delays. A step
-that is skipped emits no event — a first turn has no history, so no `resolve_query` event is sent.
-The `gate` event now appears on every question, because since D22 the grader is always called.
+that is skipped emits no event, and the wording matches what was done: `resolve_query` reads the
+conversation on a follow-up and only the message on a first turn, and says so. The `gate` event now
+appears on every question, because since D22 the grader is always called.
 
 The pipeline is synchronous by design. `POST /chat` runs it on a worker thread whose sink pushes to a
 `queue.Queue`, and the response generator drains that queue; that, not async, is what lets a step

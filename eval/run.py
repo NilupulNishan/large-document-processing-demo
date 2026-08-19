@@ -49,16 +49,18 @@ def main() -> None:
     started = time.perf_counter()
 
     for row in rows:
-        # Mirrors ResolveQueryStep: a row with history is rewritten before anything searches,
-        # and the same call reports D14's two observations (D20).
+        # Mirrors ResolveQueryStep: every turn is read, and a row with history is also
+        # rewritten before anything searches (D20, D28). A row the content filter rejects
+        # reads as None and carries on unread, exactly as the step does.
         query, asks_for_person, asked = row["question"], False, True
         streak = row.get("streak", 0)
-        if row.get("history"):
-            turn = read(row["question"], row["history"])
-            query = f"{turn.standalone_question} {row['question']}"
+        turn = read(row["question"], row.get("history") or [])
+        if turn is not None:
             asks_for_person = turn.asks_for_a_person
             asked = turn.carries_a_question
             streak = next_streak(streak, turn.progress)
+            if row.get("history"):
+                query = f"{turn.standalone_question} {row['question']}"
         row["query"] = query
 
         # Mirrors ResolveQueryStep: a turn that asks nothing ends before retrieval (D26).

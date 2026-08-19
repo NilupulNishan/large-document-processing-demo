@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from functools import cache
 
+from openai import BadRequestError, ContentFilterFinishReasonError
 from pydantic import BaseModel
 
 from app.config import (
@@ -82,6 +83,24 @@ def complete[T: BaseModel](system: str, user: str, schema: type[T], temperature:
     if parsed is None:
         raise RuntimeError(f"{AZURE_OPENAI_CHAT_DEPLOYMENT} returned no parseable output")
     return parsed
+
+
+def complete_or_none[T: BaseModel](system: str, user: str, schema: type[T]) -> T | None:
+    """
+    None when Azure's content filter rejects the call, so the caller can degrade (D28).
+
+    Two different failures, and both are reachable: the prompt is rejected with a 400 before
+    the model runs, or the response comes back 200 with finish_reason=content_filter. Any
+    other BadRequestError is a real fault and is re-raised.
+    """
+    try:
+        return complete(system, user, schema)
+    except ContentFilterFinishReasonError:
+        return None
+    except BadRequestError as error:
+        if error.code != "content_filter":
+            raise
+        return None
 
 
 def _prose_so_far(buffer: str, field: str) -> str | None:

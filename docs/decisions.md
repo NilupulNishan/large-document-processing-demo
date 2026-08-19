@@ -903,3 +903,52 @@ number the voice workstream needs.
 **Cost accepted.** The headline figure is lower and cannot be compared directly to any number logged
 before Slice 19. That is correct: the two figures measure different question sets, and the earlier
 one was measuring a set the demo does not receive.
+
+---
+
+## D28 — Whether a turn asks anything is a property of the message, not of the conversation
+
+**Decision.** `ResolveQueryStep` runs on every turn. The **rewrite** still requires history and stays
+behind that check; a first turn is searched with the words the user typed. `read()` returns
+`Rewrite | None`, and a turn Azure's content filter rejects carries on unread rather than raising.
+
+**Why.** `meta-03` — a bare `hi` as the opening message — scored **-0.40**, far above `GATE_HIGH`
+(-4.10), and was answered from the manual with citations. `decide()` was not wrong and neither was
+the reranker: **this manual documents a wiper speed setting named `HI`** (p177, "HI: wipe steadily at
+high speed"), so "hi" genuinely is relevant to that passage. `thanks` scores -1.18 against "Thanks
+for your choice" in the preface.
+
+**Two obvious fixes are both wrong, and measuring said so.** Raising `GATE_HIGH` cannot work: the
+score is honest, and no threshold above -0.40 leaves any real question on the manual route. A
+greeting word list or a minimum query length cannot work either — the collision is a property of
+*this* corpus, which the document-agnostic rule forbids depending on, and a length rule would not
+catch "thanks" or "ok that worked" anyway. Genuinely meaningless input already scores where it should
+(`asdfghjkl` -7.74, `zzzz` -7.82), so there is nothing wrong with the scorer to fix.
+
+The defect was that the pipeline asked "does this carry a question" only when there was a previous
+turn. The prompt already answered it correctly with no history at all — it names "a bare greeting" as
+not asking anything, and `read()` already renders empty history as `(none)`. **No prompt change was
+needed; the check was simply behind the wrong condition.**
+
+**The rewrite stays history-only, deliberately.** On a first turn the rewrite has nothing to resolve
+against, and concatenating it would change the query for all 46 grounded rows. Leaving `ctx.query`
+unset lets `RetrieveStep` fall back to the raw question, and retrieval came back **byte-identical** —
+Recall@1 83%, MRR 0.889, unchanged. That is what kept the blast radius on the conversational rows.
+
+**`complete_or_none`, because the filter has two failure modes and both are reachable.** Running the
+step on every turn exposed the resolve call to input it had never seen. Azure rejects
+`x55-12` — *"How deep can I drive through water?"* — with a **400 before the model runs**
+(`self_harm: medium`), and separately returns **200 with `finish_reason=content_filter`** on the
+jump-start question, intermittently. Uncaught, either one 500s the turn. The wrapper returns `None`
+for both and re-raises any other `BadRequestError`, so a real fault is still a fault. Degrading to
+"the turn was not read" is exactly the behaviour every first turn had before this decision, so the
+fallback is the old code path rather than a new one.
+
+**Cost accepted, measured.** A first turn gains one model call, median **1592 ms**. A greeting gets
+*faster* — the call replaces retrieval, reranking and grading. End-to-end eval time went 3.6 s → 4.9 s
+per question.
+
+**Known unstable.** `Hi who are you` is a greeting *and* a question, and the classifier splits on it —
+**4 `True` / 2 `False` over 6 runs at temperature 0**, so `meta-06` flaps between `decline` and
+`acknowledge`. `hi` and `hello?` are 6/6 stable. Sharpening the prompt for the mixed case needs its
+own before/after and is not done here.

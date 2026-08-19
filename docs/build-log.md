@@ -1940,3 +1940,108 @@ uv run --project backend --locked --no-sync python eval/run.py   # run twice
       Deliberately excluded from this slice; it is the direction where a wrong `acknowledge` swallows
       a genuine question.
 - [ ] `bj30-23` unchanged and open. `bj30-17` and `esc-02` alternate between runs.
+
+---
+
+## Slice 20 — every turn is read, not only the ones with history
+
+### Outcome
+
+A greeting as the opening message ends the turn without searching anything. Routing
+**93% (69/74) → 95–96% (70–71/74)** over two runs, `acknowledge` **5/7 → 7/7**, and retrieval is
+byte-identical. One model call moved from "follow-ups only" to "every turn".
+
+### The reranker was right, which rules out both obvious fixes
+
+`meta-03` scored `-0.40` and I assumed the reranker was inflating a degenerate query. It is not.
+Probed directly:
+
+```
+'hi'        -0.40  p177  'HI: wipe steadily at high speed  LO: wipe steadily at low speed  AUTO: ...'
+'thanks'    -1.18  p-2   'Thanks for your choice.........., 1 = 1. Preface......'
+'asdfghjkl' -7.74        (table of contents)
+'zzzz'      -7.82        (table of contents)
+'the'       -4.95
+```
+
+**This manual documents a wiper speed setting named `HI`.** The cross-encoder scored a real lexical
+match. Meaningless input already scores where it should, so there is nothing wrong with the scorer.
+
+That kills the two fixes worth reaching for first. Raising `GATE_HIGH` above `-0.40` would strand
+every genuine question. A greeting word list or a minimum query length would depend on *this*
+corpus — the document-agnostic rule — and would still miss `thanks` at `-1.18`.
+
+### The check was behind the wrong condition
+
+Whether a message asks anything is a property of the message. `resolve.py` decided it only when there
+was history, so `carries_a_question` was never evaluated on turn one and `acknowledge` was
+unreachable there. The prompt already handled it — it names "a bare greeting" as not asking anything,
+and `read()` already renders empty history as `(none)`. **No prompt change was needed.**
+
+The rewrite genuinely does need history and stayed behind it. Leaving `ctx.query` unset on a first
+turn lets `RetrieveStep` fall back to the raw question, which is what kept retrieval identical.
+
+### Two content-filter failures, found by running the thing
+
+Exposing the resolve call to first-turn input broke it in a way the plan half-predicted:
+
+```
+x55-12  'How deep can I drive through water?'
+        → 400 BadRequestError before the model runs, self_harm: medium
+
+bj30-08 'The battery is dead. How do I jump start it from another car?'
+        → 200, finish_reason=content_filter   (intermittent: 3/3 once, 0/1 later)
+```
+
+The first is a **prompt**-side rejection and the second a **response**-side one; they raise different
+exception types and the first fix caught only the second, which is how the eval found it. Swept all
+74 rows: 1 trips the prompt filter. `complete_or_none` returns `None` for both and **re-raises any
+other `BadRequestError`**, so a real fault is still a fault. The fallback is the old code path — the
+turn carries on unread, exactly as every first turn did before this slice.
+
+### Two runs, and what moved between them
+
+```
+run 1   95% (70/74)   esc-02      bj30-23  meta-06  noise-05
+run 2   96% (71/74)   bj30-17     bj30-23           noise-05
+```
+
+`bj30-23` and `noise-05` fail in both — real and open. The rest is the known wobble, now with one
+addition: **`meta-06` "Hi who are you" is a greeting *and* a question, and the classifier splits on
+it — 4 `True` / 2 `False` over 6 runs at temperature 0.** `hi` and `hello?` are 6/6 stable. That flap
+is new exposure from this slice and is logged, not fixed.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py   # run twice
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| `'hi'` as the opening message | `manual`, answered with citations | **`acknowledge`, nothing searched** |
+| Routing accuracy | 93% (69/74) | **95–96% (70–71/74)** |
+| `acknowledge` | 5/7 | **7/7** |
+| `decline` | 5/5 | 5/5 · 4/5 (`meta-06` flaps) |
+| `manual` | 44/46 | **44/46 — unchanged** |
+| Recall@1 / MRR, reranked | 83% / 0.889 | **83% / 0.889 — identical** |
+| First-turn model call | none | **+1592 ms median** |
+| Eval end to end | 3.6 s/question | 4.9 s/question |
+| Rows that crash on the content filter | 0 (call was skipped) | **0 (call degrades)** |
+
+### Checkpoint
+
+- [x] A greeting as the first message routes to `acknowledge` without searching, grading or answering.
+- [x] Retrieval is byte-identical — the rewrite stayed behind the history check.
+- [x] `manual` held at 44/46 across both runs, the stated regression risk.
+- [x] Both content-filter failure modes degrade instead of raising; other 400s still raise.
+- [ ] **`_ACKNOWLEDGED` is the wrong copy for a greeting.** "Glad that helped." is now what `hi` gets,
+      and nothing helped yet. The route is right and the reply is not. One string, next slice.
+- [ ] `meta-06` flaps 4:2 on `carries_a_question`. The prompt says "a bare greeting"; this is a
+      greeting that also asks something.
+- [ ] `answer.py`, `escalate.py` and `gate.py` still raise on a content filter trip. Unmeasured, and
+      their exposure did not change here — but `x55-12` proves the filter fires on this corpus.
+- [ ] `bj30-23` and `noise-05` unchanged and open.

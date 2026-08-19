@@ -1,6 +1,7 @@
 """
-Follow-up turns. "I parked it, what now" means nothing retrieved on its own, so it is
-rewritten into a standalone question before search (D20). No history, no call.
+Every turn is read here. Whether it asks anything is a property of the message, so it is
+checked on the first turn too (D28); the rewrite into a standalone question needs history
+and stays behind it (D20).
 """
 
 from typing import Literal
@@ -8,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.pipeline.base import PipelineContext
-from app.providers.azure_openai import complete
+from app.providers.azure_openai import complete_or_none
 
 # The subject rarely survives further back than this, and every turn costs prompt tokens.
 HISTORY_TURNS = 6
@@ -57,11 +58,15 @@ where one is, is not asking for a person.
   unclear           none of these, including a plain next question on the same subject"""
 
 
-def read(question: str, history: list[dict]) -> Rewrite:
-    """What the turn is, and what it reports. One call; D14's fields ride along free."""
+def read(question: str, history: list[dict]) -> Rewrite | None:
+    """What the turn is, and what it reports. One call; D14's fields ride along free.
+
+    None when the content filter rejects the completion — the caller carries on as if the
+    turn had not been read, which is what every turn did before D28.
+    """
     earlier = [m["content"] for m in history if m["role"] == "user"][-HISTORY_TURNS:]
     asked = "\n".join(f"- {text}" for text in earlier) or "(none)"
-    return complete(
+    return complete_or_none(
         _SYSTEM, f"Earlier questions:\n{asked}\n\nLatest message: {question}", Rewrite
     )
 
@@ -79,21 +84,21 @@ def resolve(question: str, history: list[dict]) -> str:
     """The standalone form of `question`. Plain function, so the eval harness can call it."""
     if not history:
         return question
-    return read(question, history).standalone_question
+    turn = read(question, history)
+    return turn.standalone_question if turn else question
 
 
 class ResolveQueryStep:
     name = "resolve_query"
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
-        # A first turn needs no rewrite, so no call is made and no event is announced (D9).
-        if not ctx.history:
+        turn = read(ctx.question, ctx.history)
+        if turn is None:
             return ctx
 
-        turn = read(ctx.question, ctx.history)
         ctx.asks_for_person = turn.asks_for_a_person
         ctx.unresolved_streak = next_streak(ctx.unresolved_streak, turn.progress)
-        ctx.emit(self.name, "Read the conversation so far")
+        ctx.emit(self.name, "Read the conversation so far" if ctx.history else "Read the message")
 
         # Nothing was asked, so nothing is searched. Ending the turn here is what stops a
         # rewrite inventing a question out of "thanks" and answering it (D26).
@@ -101,6 +106,9 @@ class ResolveQueryStep:
             ctx.route = "acknowledge"
             return ctx
 
-        # Concatenated rather than replaced: the user's own wording still feeds BM25.
-        ctx.query = f"{turn.standalone_question} {ctx.question}"
+        # Only a follow-up has anything to resolve against, and leaving ctx.query unset on a
+        # first turn is what keeps every grounded query byte-identical (D28). Concatenated
+        # rather than replaced: the user's own wording still feeds BM25.
+        if ctx.history:
+            ctx.query = f"{turn.standalone_question} {ctx.question}"
         return ctx

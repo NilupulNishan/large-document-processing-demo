@@ -122,12 +122,14 @@ Questions that exercise each route:
 | "What torque do I tighten the wheel nuts to?" (X55) | `escalate` — that manual states no torque |
 | then "I parked it, what now?" | a `resolve_query` event, then `source=manual` — not a new topic |
 | "What does the warranty cover?" | `source=general`, a `web` event, `[web]` citations |
-| "Write me a poem about the sea" | `decline`, one short refusal, no model call |
+| "Write me a poem about the sea" | `decline`, one short refusal, no answer call |
+| "hi" as the opening message | `acknowledge` — nothing searched, graded or answered (D28) |
 
 Two step events are worth watching. A `web` event appears only on the `general` route; on a
-manual-answered question it means the gate misrouted. A `resolve_query` event appears only on a
-follow-up turn — seeing one on the first question of a conversation is a bug, since there is no
-history to read. The `gate` event now appears on every question: since D22 the grader runs each time,
+manual-answered question it means the gate misrouted. A `resolve_query` event appears on every turn,
+but it says different things: "Read the conversation so far" on a follow-up, "Read the message" on a
+first turn, where there is no history to rewrite against and only the question itself is read (D28).
+The `gate` event now appears on every question: since D22 the grader runs each time,
 because a high retrieval score means the manual discusses the subject, not that it states the number
 asked for.
 
