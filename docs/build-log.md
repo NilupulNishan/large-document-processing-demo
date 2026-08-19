@@ -1826,3 +1826,117 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
       runs when there is history.
 - [ ] `bj30-17` and `bj30-23` unchanged and open. The misroute set moved again between runs — every
       figure here is ±2 rows.
+
+---
+
+## Slice 19 — the harness measures the turns the demo actually receives
+
+### Outcome
+
+Thirteen labelled rows for greetings, acknowledgements and transcription noise, 61 → 74. Routing
+falls **97% (59/61) → 93% (69/74)**, and the drop is the point: three of the five misroutes are new
+rows exposing behaviour that was previously unmeasured. No code changed.
+
+### Why the number going down is the deliverable
+
+Two conversational rows were the entire coverage of a demo's most common input. That blind spot is
+why D20, measured carefully in Slice 12, produced a worse bug six slices later and nothing caught it
+until it was typed into a live browser. A harness that only asks about the vehicle cannot fail on a
+greeting, so it reports 97% and says nothing useful.
+
+It is also the gate on voice input. Transcription noise reaches `resolve_query` looking exactly like
+the turns that broke routing on 2026-08-18.
+
+### A bare "hi" is worse than the open item said
+
+The previous checkpoint recorded that a first-turn greeting "still reaches retrieval". Measured, it
+does more than that:
+
+```
+meta-03  'hi'       -0.40  HIGH    got manual    want acknowledge
+meta-04  'hello?'   -8.70  grader  got decline   want acknowledge
+```
+
+`-0.40` is not a marginal score. It sits far **above** `GATE_HIGH` (`-4.10`) — near the top of the
+range the whole corpus produces — so the cross-encoder judged some passage highly relevant to the
+word "hi", and `decide()` correctly trusted it. **The first thing a client types in the demo gets
+answered from the manual, confidently, with citations, to a question nobody asked.** That is the
+D13 failure mode reached through a door D26 closed only for follow-ups.
+
+`hello?` lands in the grader band and gets `decline` — wrong label, survivable reply.
+
+### Noise breaks the gate, not retrieval
+
+Each noise row is a degraded paraphrase of an existing row, reusing its `expected_pages`, so the
+degradation is the only variable.
+
+```
+noisy   n=5  @1 100% @3 100% @5 100% @10 100%   MRR 1.000
+```
+
+Hybrid BM25 + dense with RRF handles `presure`, `refule`, `whel` and a stray `um ... uh` without
+losing a single page — better than the clean corpus average (`@1 83%`, MRR 0.889). D3's argument for
+hybrid retrieval holds up under exactly the input it was never tested on.
+
+The gate does not:
+
+```
+noise-05  'wat torqe for the whel nuts'  -10.51  got manual+general  want manual
+bj30-24   'What is the wheel nut torque specification?'    manual
+```
+
+Same page, ranked first, and the reranker scores it `-10.51` — below `GATE_LOW` (`-7.50`). Retrieval
+found the answer; the cross-encoder would not vouch for it against the misspelled query, so the route
+fell through to `manual+general`, which until now had **zero** labelled rows. A safety value the
+manual answers gets padded with web search because the question was typed badly.
+
+### The new rows are stable; the old instability is unchanged
+
+Two consecutive runs, same corpus, same rows:
+
+| | run 1 | run 2 |
+|---|---|---|
+| `meta-03`, `meta-04`, `noise-05` | identical scores, identical routes | identical scores, identical routes |
+| the fifth misroute | `bj30-17` | `esc-02` |
+| routing accuracy | 93% (69/74) | 93% (69/74) |
+
+The three new failures are deterministic, not wobble — they are bugs, and re-running will not make
+them go away. The ±2 movement stays confined to genuinely ambiguous safety rows, which is consistent
+with `question_touches_a_safety_topic` being the unstable field.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+uv run --project backend --locked --no-sync python eval/run.py   # run twice
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Rows | 61 | **74** |
+| Conversational rows | 2 | **10** |
+| Transcription-noise rows | 0 | **5** |
+| Routing accuracy | 97% (59/61) | **93% (69/74)** |
+| `acknowledge` | 1/1 | **5/7** |
+| `decline` | 3/3 | **5/5** |
+| `manual` | — | **44/46** |
+| Recall@1, noisy input | not measured | **100%, MRR 1.000** |
+| `manual+general` rows ever produced | 0 | **1** |
+
+### Checkpoint
+
+- [x] Greetings, acknowledgements and typos are labelled and scored.
+- [x] Noise rows reuse a base row's expected pages, so retrieval and gate effects are separable.
+- [x] Two runs agree on every new row.
+- [x] The first-turn greeting gap is now a measured failure with a score, not a note in a checkpoint.
+- [ ] **`meta-03` is the highest-priority open bug in the system.** "hi" scoring `-0.40` means the
+      fix is not only running `resolve_query` on the first turn — it is that a content-free query can
+      score at the top of the band at all.
+- [ ] `noise-05` — the gate distrusts a correctly retrieved safety value when the query is misspelled.
+      Voice input will produce this input shape constantly.
+- [ ] No coverage of politeness wrapped around a real question ("hi, how do I change a flat tyre?").
+      Deliberately excluded from this slice; it is the direction where a wrong `acknowledge` swallows
+      a genuine question.
+- [ ] `bj30-23` unchanged and open. `bj30-17` and `esc-02` alternate between runs.

@@ -868,3 +868,38 @@ requires. The turn costs no search, no grader call and no answer call.
 retrieved passages instead of the question alone. Here the domain check runs first so it does not
 matter, but it is the same field that flips between identical runs. It belongs with the grader
 instability, which remains the largest open correctness risk.
+
+---
+
+## D27 — The eval set labels the behaviour we want, not the behaviour we have
+
+**Decision.** `meta-03` ("hi") and `meta-04` ("hello?") are labelled `acknowledge` although no code
+path can produce that route for a first turn — `ResolveQueryStep` returns early with no history, so
+`carries_a_question` is never read. They fail, and the reported figure drops from 97% to 93%.
+Transcription noise gets its own `kind`, `noisy`, and each noise row is a degraded paraphrase of an
+existing row reusing that row's `expected_pages`.
+
+**Why label a route the code cannot reach.** The alternative is labelling `meta-03` with whatever
+production does today, which makes the row pass and deletes the defect from the report. A harness
+that scores the current behaviour as correct by definition measures nothing. D26 already states the
+rule — a turn that asks nothing is acknowledged — and `resolve.py`'s prompt names "a bare greeting"
+as one such turn, so `acknowledge` is the specified behaviour and the row is a conformance test
+against the spec, not against the implementation.
+
+**It immediately paid for itself.** The open item said a first-turn greeting "still reaches
+retrieval". The row shows "hi" scoring **-0.40**, far above `GATE_HIGH` (-4.10), routed to `manual` —
+so the opening message of a demo is answered from the manual with citations. Running `resolve_query`
+on the first turn would hide that; it would not explain why a content-free query outscores most of
+the corpus.
+
+**Why noise rows are paraphrases rather than new questions.** A new question needs its expected pages
+established, which makes the row's own labelling a variable. Reusing `bj30-24`'s pages for
+`noise-05` means any difference between them is the misspelling and nothing else. That isolation is
+what made the finding readable: retrieval ranked the page first (`noisy` recall@1 100%, MRR 1.000)
+while the reranker scored it -10.51 and the route fell to `manual+general`. **Noise degrades the
+gate's confidence, not the retriever's ranking** — which is the opposite of what we assumed, and the
+number the voice workstream needs.
+
+**Cost accepted.** The headline figure is lower and cannot be compared directly to any number logged
+before Slice 19. That is correct: the two figures measure different question sets, and the earlier
+one was measuring a set the demo does not receive.
