@@ -45,6 +45,9 @@ export async function transcribe(audio: Blob): Promise<string> {
   return text;
 }
 
+/** Ten-minute credentials for the browser recogniser; the resource key stays server-side. */
+export const speechToken = () => get<{ token: string; region: string }>("/speech/token");
+
 export const listManuals = () => get<Manual[]>("/manuals");
 export const listSessions = () => get<SessionSummary[]>("/sessions");
 export const createSession = (manual: string) =>

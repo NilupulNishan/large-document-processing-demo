@@ -159,6 +159,17 @@ async def transcribe(request: Request) -> dict:
     return {"text": text}
 
 
+@app.get("/speech/token")
+def speech_token() -> dict:
+    """Short-lived credentials for the browser recogniser. The key stays here (D36)."""
+    try:
+        token, region = speech.issue_token()
+    except RuntimeError as error:
+        logger.warning("speech token failed: %s", error)
+        raise HTTPException(502, str(error)) from error
+    return {"token": token, "region": region}
+
+
 def _frame(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 

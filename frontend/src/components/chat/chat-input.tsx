@@ -70,18 +70,18 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
 
             <button
               type="button"
-              onClick={dictation.state === "recording" ? dictation.stop : dictation.start}
+              onClick={dictation.state === "listening" ? dictation.stop : dictation.start}
               disabled={disabled || dictation.state === "transcribing"}
               className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 active:scale-95 ${
-                dictation.state === "recording"
+                dictation.state === "listening"
                   ? "bg-red-600 text-white shadow-sm hover:bg-red-700"
                   : "bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
               }`}
-              aria-label={dictation.state === "recording" ? "Stop recording" : "Dictate a question"}
+              aria-label={dictation.state === "listening" ? "Stop recording" : "Dictate a question"}
             >
               {dictation.state === "transcribing" ? (
                 <Loader2 size={18} className="animate-spin" />
-              ) : dictation.state === "recording" ? (
+              ) : dictation.state === "listening" ? (
                 <Square size={16} />
               ) : (
                 <Mic size={18} />
@@ -103,12 +103,18 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
             </button>
           </div>
 
+          {dictation.interim && (
+            <p className="px-5 pb-2 text-[15px] leading-6 text-slate-400 italic">
+              {dictation.interim}
+            </p>
+          )}
+
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
             <span>
               {dictation.error
                 ? dictation.error
-                : dictation.state === "recording"
-                  ? "Recording — press stop when you are done"
+                : dictation.state === "listening"
+                  ? "Listening — press stop when you are done"
                   : dictation.state === "transcribing"
                     ? "Writing it down…"
                     : "Press Enter to send"}
