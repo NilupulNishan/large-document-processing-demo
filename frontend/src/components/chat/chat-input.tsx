@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizonal } from "lucide-react";
+import { Loader2, Mic, Square, SendHorizonal } from "lucide-react";
+
+import { useDictation } from "@/hooks/use-dictation";
 
 type Props = {
   onSend: (message: string) => void;
@@ -12,7 +14,12 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const canSend = value.trim().length > 0 && !disabled;
+  const appendDictated = (text: string) =>
+    setValue((current) => (current ? `${current.trimEnd()} ${text}` : text));
+  const dictation = useDictation(appendDictated);
+
+  const busy = disabled || dictation.state === "transcribing";
+  const canSend = value.trim().length > 0 && !busy;
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -51,7 +58,7 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
               onChange={(e) => setValue(e.target.value)}
               placeholder="Ask a question, or describe the fault…"
               rows={1}
-              disabled={disabled}
+              disabled={busy}
               className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -60,6 +67,26 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
                 }
               }}
             />
+
+            <button
+              type="button"
+              onClick={dictation.state === "recording" ? dictation.stop : dictation.start}
+              disabled={disabled || dictation.state === "transcribing"}
+              className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 active:scale-95 ${
+                dictation.state === "recording"
+                  ? "bg-red-600 text-white shadow-sm hover:bg-red-700"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+              }`}
+              aria-label={dictation.state === "recording" ? "Stop recording" : "Dictate a question"}
+            >
+              {dictation.state === "transcribing" ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : dictation.state === "recording" ? (
+                <Square size={16} />
+              ) : (
+                <Mic size={18} />
+              )}
+            </button>
 
             <button
               type="button"
@@ -77,7 +104,15 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
           </div>
 
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
-            <span>Press Enter to send</span>
+            <span>
+              {dictation.error
+                ? dictation.error
+                : dictation.state === "recording"
+                  ? "Recording — press stop when you are done"
+                  : dictation.state === "transcribing"
+                    ? "Writing it down…"
+                    : "Press Enter to send"}
+            </span>
             <span>Shift + Enter for new line</span>
           </div>
         </div>

@@ -9,14 +9,16 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app import db
-from app.config import MANUALS_DIR
+from app.config import MANUALS_DIR, MAX_AUDIO_BYTES
 from app.pipeline import build_pipeline
+from app.providers import azure_speech as speech
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +136,27 @@ def update_escalation(escalation_id: str, body: EscalationStatus) -> dict:
         raise HTTPException(404, "No such escalation")
     db.set_escalation_status(escalation_id, body.status)
     return db.get_escalation(escalation_id)
+
+
+@app.post("/transcribe")
+async def transcribe(request: Request) -> dict:
+    """Spoken audio to text. The text is returned, never sent — the user edits it first (D35)."""
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(400, "No audio")
+    if len(audio) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, "Recording too long")
+
+    content_type = request.headers.get("content-type", "")
+    try:
+        # Blocking call on a worker thread, as the pipeline already is.
+        text = await run_in_threadpool(speech.transcribe, audio, content_type)
+    except ValueError as error:
+        raise HTTPException(415, str(error)) from error
+    except RuntimeError as error:
+        logger.warning("transcription failed: %s", error)
+        raise HTTPException(502, str(error)) from error
+    return {"text": text}
 
 
 def _frame(event: str, data: dict) -> str:

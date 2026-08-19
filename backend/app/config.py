@@ -62,6 +62,13 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "")
 AZURE_OPENAI_CHAT_DEPLOYMENT = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT", "")
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "")
+# Speech-to-text. A separate Azure resource from the OpenAI one, and it only ever turns
+# recorded audio into the same question string the chat box produces (D35).
+AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
+AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
+SPEECH_LANGUAGE = os.getenv("SPEECH_LANGUAGE", "en-US")
+MAX_AUDIO_BYTES = 4 * 1024 * 1024
+
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 DOMAIN_DESCRIPTION = os.getenv("DOMAIN_DESCRIPTION", "")
 # Corpus knowledge, not code. See D13 and backend/.env.example.

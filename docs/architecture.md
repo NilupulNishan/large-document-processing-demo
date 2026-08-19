@@ -3,7 +3,8 @@
 This document describes the intended boundaries and data flow. It must be kept in step with the code.
 If a component named here does not exist yet, it is marked **(not built)**.
 
-Everything runs locally. Azure OpenAI and Tavily are the only network calls.
+Everything runs locally. Azure OpenAI, Azure Speech and Tavily are the only network calls;
+speech is reached only when someone dictates a question (D35).
 
 Status: the offline half is built — parse, normalise, merge, page-offset detection, embedding and
 indexing. The online half is built end to end — `resolve_query`, `retrieve`, `rerank`, `gate`,
@@ -269,6 +270,7 @@ handoff then resets the counter, or every later turn in the session would escala
 | `GET /sessions/{id}` | one conversation with its messages and citations |
 | `DELETE /sessions/{id}` | removes the conversation, its messages and any handoff raised from it (D25) |
 | `POST /chat` | `{session_id, question}` → the stream below |
+| `POST /transcribe` | raw audio bytes → `{text}`; the text is returned, never sent (D35) |
 | `GET /escalations` | operator inbox; optional `?status=open` |
 | `GET /escalations/{id}` | the full handoff package, transcript included |
 | `POST /escalations/{id}/reply` | an agent's turn, written into the user's session as `role="agent"` (D24) |
@@ -303,7 +305,7 @@ question anyone asks.
 
 ## Boundaries
 
-- Azure, LanceDB, Docling and Tavily SDK types stop in `backend/app/providers/`.
+- Azure OpenAI, Azure Speech, LanceDB, Docling and Tavily stop in `backend/app/providers/`.
 - Gate routing and escalation triggers are pure functions over scores, counters and booleans. The
   grader and the follow-up rewrite are the model calls that feed them; both report observations, and
   one of those observations — the quoted value — is verified against the passages before it counts.

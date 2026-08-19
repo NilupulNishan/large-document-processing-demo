@@ -1,5 +1,6 @@
 /** The backend boundary. Wire formats stop here; components never call fetch. */
 
+import { WAV_CONTENT_TYPE } from "./audio";
 import { API_BASE } from "./config";
 import type {
   Citation,
@@ -29,6 +30,19 @@ async function del<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return response.json();
+}
+
+/** Recorded audio to text. Raw bytes, not JSON, and always WAV/PCM 16 kHz mono — the one
+ *  encoding the speech service documents that a browser can produce (D35). */
+export async function transcribe(audio: Blob): Promise<string> {
+  const response = await fetch(`${API_BASE}/transcribe`, {
+    method: "POST",
+    headers: { "Content-Type": WAV_CONTENT_TYPE },
+    body: audio,
+  });
+  if (!response.ok) throw new Error(`/transcribe returned ${response.status}`);
+  const { text } = (await response.json()) as { text: string };
+  return text;
 }
 
 export const listManuals = () => get<Manual[]>("/manuals");

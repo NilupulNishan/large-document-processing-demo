@@ -2320,3 +2320,173 @@ uv run --project backend --locked --no-sync python eval/run.py                  
 - [ ] `bj30-17` is consistently wrong, not unstable — the grader quotes a value where the manual
       states no wading depth. A grader-content defect, and its own slice.
 - [ ] `bj30-23` unchanged.
+
+---
+
+## Slice 24 — wading as a safety topic: measured, reverted, and a correction
+
+### Outcome
+
+No code, no config shipped. One correction to Slice 23, and one finding worth keeping about what
+`SAFETY_TOPICS` actually is.
+
+### Correcting Slice 23
+
+Slice 23's checkpoint states that `bj30-17` is "consistently wrong — the grader quotes a value where
+the manual states no wading depth, so the D22 veto never fires". **That is wrong.** Measured directly,
+three runs each, both wading rows escalate correctly with an **empty** quote:
+
+```
+bj30-17  value=True safety=True answers=False quoted=False -> escalate   (3/3)
+x55-12   value=True safety=True answers=False quoted=False -> escalate   (3/3)
+```
+
+There is no quote-verification hole. The veto fires exactly as designed when the grader marks the
+question as touching a safety topic.
+
+### What was actually true, and still is
+
+```
+SAFETY_TOPICS = braking, airbags, seat belts and restraints, towing,
+                jacking and lifting, high-voltage battery
+```
+
+Wading is not listed, and the grader prompt says a question touches a safety topic "when it is about
+one of the **listed** topics". So `safety=False` on a wading question is the model obeying its
+instructions, and the flapping is it wavering between the instruction and the obvious hazard.
+
+### Adding the topic looked right in isolation and failed in the harness
+
+Isolated, three runs per row: `bj30-17` escalate 3/3, and four controls (`x55-15`, `bj30-13`,
+`x55-11`, `x55-09`) unchanged at `manual` 3/3.
+
+Across the full eval, three runs:
+
+| | before | after |
+|---|---|---|
+| headline | 99% · 95% · 95% | 95% · 96% · 95% |
+| `manual` | 45/46 · 45/46 · 45/46 | **44/46 · 45/46 · 44/46** |
+| `escalate` | 12/12 · 10/12 · 10/12 | 11/12 · 10/12 · 11/12 |
+| wading pair failures | 2 across 3 runs | **3 across 3 runs** |
+
+`manual` fell below 45/46 in two of three runs — the stated revert trigger — and the wading pair got
+*worse*, with the failure moving from `bj30-17` to `x55-12` rather than going away. **Reverted.**
+
+### Why the isolated probe did not predict it
+
+`SAFETY_TOPICS` is interpolated into the grader's system prompt on **every** call — `grade()` builds
+`f"Safety topics: {topics}"` for all 74 rows, not only wading ones. It looks like a scoped config
+value and is really a global prompt edit. That is why `bj30-02`, an engine-oil question, began routing
+`general`: the change perturbed the whole verdict distribution, thinly, and a six-row control probe
+cannot see an effect spread across seventy-four.
+
+**Two slices running, two reverts.** Both times a targeted measurement said yes and the harness said
+no. The harness is the only instrument that sees the whole distribution; nothing smaller substitutes
+for it.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync python eval/run.py   # three times
+```
+
+### Checkpoint
+
+- [x] Slice 23's stated cause for `bj30-17` corrected — there is no quote-verification hole.
+- [x] The real gap identified: wading is absent from `SAFETY_TOPICS`.
+- [x] Adding it measured across three runs and reverted against the pre-stated criterion.
+- [x] `SAFETY_TOPICS` recorded as a global prompt input, not a scoped setting.
+- [ ] **Both wading rows still misroute**, one per run, alternating. A safety question answered from
+      the manual with citations remains the most demo-damaging bug open.
+- [ ] `bj30-02` now flaps between `manual` and `general`. Its `-7.65` sits 0.20 above the `GATE_LOW`
+      D31 set, against rewrite variance measured at 0.61 — the margin is too thin.
+- [ ] `bj30-23` unchanged.
+
+---
+
+## Slice 25 — dictating a question
+
+### Outcome
+
+A mic control in the composer records a question, Azure Speech turns it into text, and the text is
+written into the input box for the user to read and send. **No new dependency**, and nothing
+downstream of the composer changed.
+
+### Voice input is in scope now; voice output is not
+
+`AGENTS.md` banned "voice" outright. That was too broad for what this is: dictation produces the same
+`question` string the chat box does, so `resolve_query`, `decide()` and the gate are untouched. The
+non-goal is narrowed to **voice output** — read-aloud answers, synthesised speech — which stays out.
+
+### It never sends what it heard
+
+The transcript is appended to whatever is already in the box. The user reads it and presses send.
+
+`noise-05` measured why: a misspelled question retrieved the right page first and was then scored
+-10.51, below the band, so a torque figure the manual states was padded with a web search. D30
+mitigates that; it does not remove it. On a corpus whose answers are torque figures and wading depths,
+removing the human check at the least reliable point in the chain is the wrong trade. Appending rather
+than replacing also means dictation can add to a typed question instead of destroying it.
+
+### No dependency, because the call is one POST
+
+Azure Speech's short-audio REST endpoint takes raw bytes and two headers, so
+`providers/azure_speech.py` uses stdlib `urllib.request`. `httpx` is already installed transitively by
+the `openai` SDK, but declaring it would still mean a lockfile change and an install command, and
+`AGENTS.md` asks for a local function where only a small one is needed. Nothing to install.
+
+### Shipped broken, and how it hid
+
+The first version posted the recording as it came off the microphone with
+`Content-Type: audio/webm;codecs=opus`. Every request returned 200 and an empty transcript.
+
+**The REST API for short audio decodes exactly two formats** — WAV/PCM 16 kHz mono and OGG/OPUS.
+WebM is not one of them, and every Chromium browser records WebM and nothing else. The header was
+written from memory instead of from the specification, so this could never have worked.
+
+It hid because undecodable audio is not rejected. Measured against `azure-stt-support`:
+
+```
+valid silent wav        HTTP 200  {'RecognitionStatus': 'Success', 'DisplayText': ''}
+garbage as webm         HTTP 200  {'RecognitionStatus': 'Success', 'DisplayText': ''}
+garbage as wav          HTTP 200  {'RecognitionStatus': 'Success', 'DisplayText': ''}
+```
+
+**A wrong Content-Type is byte-for-byte identical to a user who said nothing.** The UI dutifully
+reported "Nothing was heard. Try again, closer to the microphone" — advice that could never have
+helped. Two earlier notes in this log called that an API ambiguity; it was this bug producing it.
+
+`lib/audio.ts` now decodes whatever the browser recorded via `decodeAudioData`, resamples through an
+`OfflineAudioContext` to 16 kHz mono and encodes PCM WAV, with no dependency. Safari works as a
+result, since `decodeAudioData` reads the MP4/AAC it records — the browser check is gone. And the
+provider refuses anything outside `audio/wav`/`audio/ogg` with a **415**, so the next format mistake
+fails loudly instead of impersonating silence.
+
+### Commands
+
+```bash
+uv run --project backend --locked --no-sync ruff check .
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | |
+|---|---|
+| New backend dependency | **none** |
+| New frontend dependency | **none** |
+| Endpoint | `POST /transcribe` — 400 empty · 413 over 4 MB · 502 unreachable |
+| Pipeline steps changed | **none** |
+| `ruff` / `tsc` / `eslint` / `next build` | all pass |
+
+### Checkpoint
+
+- [x] A dictated question lands in the box as editable text and is never auto-sent.
+- [x] Azure Speech SDK types stop in `providers/`; the domain never sees them.
+- [x] No dependency added to either side.
+- [x] The audio format matches the published specification, not an assumption.
+- [x] An unsupported `Content-Type` returns 415 rather than an empty transcript.
+- [x] **Walked in a browser with a real microphone — dictation returns the spoken text.**
+- [x] Safari is no longer excluded; whatever the browser records is decoded and re-encoded.
+- [ ] Long recordings are capped at 4 MB rather than chunked; the short-audio endpoint tops out
+      around 60 s and nothing enforces that yet.

@@ -1109,3 +1109,48 @@ numbers were seen.
 **Cost accepted.** The instability stands, now bounded and attributed rather than guessed at. The
 next attempt has to be judged on `eval/run.py` across three runs, with the census as a secondary
 signal only.
+
+---
+
+## D35 — Voice input writes into the box; it never sends
+
+**Decision.** A mic control records the question, `POST /transcribe` returns the words, and the words
+are appended to whatever is in the composer. The user reads them and presses send. Voice **output** —
+read-aloud answers — stays a non-goal; `AGENTS.md` was narrowed from a blanket ban on "voice" to that.
+
+**Why the transcript is not auto-sent.** `noise-05` measured a misspelled question retrieving the
+right page first and then being scored `-10.51`, below the band, so a torque figure the manual states
+was padded with a web search. D30 mitigates that and does not remove it. Auto-sending removes the
+human check at exactly the point the input is least reliable, on a corpus where the answers are
+torque figures and wading depths. Appending rather than replacing means dictation can add to a typed
+question instead of destroying it.
+
+**No new dependency.** Azure Speech's short-audio REST endpoint is one POST with two headers, so it
+is written with stdlib `urllib.request` in `providers/azure_speech.py`. `httpx` is already installed
+transitively by the `openai` SDK, but declaring it would still mean a lockfile change and an install
+command; `AGENTS.md` asks for a local function when only a small one is needed.
+
+**No audio through the pipeline.** The endpoint hands bytes to the provider on a worker thread and
+returns a string. `resolve_query`, `decide()` and the gate never learn a question was spoken — voice
+produces the same `question` string the chat box does, which is the property that keeps this small.
+
+**The browser re-encodes to WAV, because the service decodes two formats and WebM is not one.**
+The REST API for short audio documents exactly two: WAV/PCM 16 kHz mono, and OGG/OPUS. Every
+Chromium browser records WebM and nothing else, so posting the recording as it came off the
+microphone could never have worked.
+
+**How that failure presents is the trap.** Audio the service cannot decode is not rejected — it
+returns HTTP 200, `RecognitionStatus: Success`, `DisplayText: ""`, which is byte-for-byte what
+silence returns. Measured against the live resource: a valid silent WAV, bytes labelled
+`audio/webm`, and bytes labelled `audio/wav` that are not audio all answer identically. A wrong
+`Content-Type` therefore looks exactly like a user who said nothing, and the first version of this
+was shipped believing WebM was supported because that was written from memory rather than from the
+specification.
+
+So `lib/audio.ts` decodes whatever the browser recorded with `decodeAudioData`, resamples through an
+`OfflineAudioContext` to 16 kHz mono, and encodes PCM WAV — no dependency. Two consequences worth
+having: Safari works, because `decodeAudioData` reads the MP4/AAC it records, and the provider
+**refuses** any `Content-Type` outside `audio/wav`/`audio/ogg` with a 415 rather than letting the
+next such mistake hide as silence.
+
+**Translation stays out** even though the resource offers it: multilingual responses are a non-goal.
