@@ -1154,3 +1154,48 @@ having: Safari works, because `decodeAudioData` reads the MP4/AAC it records, an
 next such mistake hide as silence.
 
 **Translation stays out** even though the resource offers it: multilingual responses are a non-goal.
+
+---
+
+## D36 — Live dictation streams to Azure from the browser, with the batch path kept as a fallback
+
+**Decision.** The mic runs Azure's continuous recognition over a WebSocket opened **by the browser**,
+authenticated with a ten-minute token from `GET /speech/token`. Interim results render below the
+composer; only finalised phrases enter the textarea. If the stream cannot start, the turn falls back
+to the recorded-then-posted path of D35. `microsoft-cognitiveservices-speech-sdk@1.51.0` (MIT) is
+added, imported dynamically.
+
+**Why the REST path cannot do it.** The documentation is explicit: *"The REST API for short audio
+returns only final results. It doesn't provide partial results."* Words-as-you-speak is a different
+API, not a parameter.
+
+**The key never reaches the browser.** `AZURE_SPEECH_KEY` stays in `backend/.env`; the browser gets a
+token from the documented `issueToken` exchange, scoped and expiring in ten minutes. Shipping the
+subscription key to the client would have been the shortest path and is the one thing here that would
+have been unrecoverable.
+
+**Interim and final are different kinds of text, so they render differently.** `recognizing` fires
+every few hundred ms and is *revised* — words change as context arrives. Written straight into the
+textarea it rewrites itself mid-word and reads as a bug. So interim sits under the box, greyed and
+italic, replaced wholesale on each event; `recognized` commits into the value. What the user edits and
+sends is therefore always finalised text, never a half-formed guess.
+
+**Still never auto-sent**, for the reason D35 gives: `noise-05` measured a misspelled question scoring
+-10.51 and being padded with a web search, and on a corpus of torque figures the human check belongs
+at the least reliable point in the chain.
+
+**A new dependency, justified rather than assumed.** 7.2 MB unpacked and seven transitive packages is
+not small. It is imported with `await import(...)` inside `start()`, so it is code-split: verified in
+the production build that the 378 KB SDK chunk is absent from the page HTML and downloads only on the
+first mic click. Hand-rolling Azure's WebSocket protocol — framed audio messages, `speech.hypothesis`
+and `speech.phrase` handling — was the alternative and is not a sensible thing to own.
+
+**The fallback is real, not decorative.** A client site that blocks outbound WebSockets would
+otherwise lose the microphone entirely. `start()` tries streaming, and on any failure records with
+`MediaRecorder` and posts to `/transcribe` instead, telling the user which mode it is in. Both paths
+already existed, so this cost about fifteen lines.
+
+**On the WebSocket non-goal.** `AGENTS.md` rules out WebSocket *transport*: this app runs no
+WebSocket server, and `POST /chat` remains SSE and one-directional. The dictation socket is opened by
+the browser directly to Azure — no audio and no socket touches this backend. Adjacent to the rule
+rather than inside it, and taken as an explicit decision rather than an oversight.

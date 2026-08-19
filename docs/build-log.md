@@ -2490,3 +2490,83 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [x] Safari is no longer excluded; whatever the browser records is decoded and re-encoded.
 - [ ] Long recordings are capped at 4 MB rather than chunked; the short-audio endpoint tops out
       around 60 s and nothing enforces that yet.
+
+---
+
+## Slice 26 — words appear while you talk
+
+### Outcome
+
+Live dictation. Interim text renders under the composer as you speak and commits into the box when
+each phrase finalises. Nothing is auto-sent. The batch path from Slice 25 survives as a fallback.
+
+### The REST API could never have done this
+
+> The REST API for short audio returns only final results. It doesn't provide partial results.
+
+Words-as-you-speak needs Azure's continuous recognition over a WebSocket, which emits `recognizing`
+(revised constantly) and `recognized` (final) events. Different API, not a flag.
+
+### Two streams of text, rendered differently
+
+`recognizing` fires every few hundred ms and rewrites itself as context arrives. Put straight into
+the textarea it looks like a bug: the box visibly re-types mid-word. So interim sits below the input,
+greyed and italic, replaced on each event; only `recognized` phrases append to the value. **What the
+user edits and sends is always finalised text.**
+
+### The dependency, and what it cost
+
+`microsoft-cognitiveservices-speech-sdk@1.51.0`, MIT, 7.2 MB unpacked, seven transitive packages.
+Loaded with `await import(...)` inside `start()`. Verified in the production build rather than
+assumed:
+
+```
+0ewqylav5c-nb.js   378 KB   SpeechServiceConnection ×4   NOT referenced by the page HTML
+09i_p8g.2fnk9.js    54 KB   one import-specifier string  in the initial load
+```
+
+The SDK downloads on the first mic click and never on page load.
+
+### The key stays on the backend
+
+`GET /speech/token` performs the documented `issueToken` exchange and returns a ten-minute token plus
+the region. Verified against the live resource: 200, a 756-character JWT, region `eastus`. Putting
+`AZURE_SPEECH_KEY` in the browser would have been fewer lines and is the one mistake here that could
+not have been walked back.
+
+### A fallback that is actually reachable
+
+`start()` tries streaming; on any failure — blocked socket, token fetch, SDK import — it records with
+`MediaRecorder` and posts to `/transcribe`, and says which mode it is in. A client network blocking
+outbound WebSockets would otherwise lose the microphone entirely. Both paths already existed, so it
+cost about fifteen lines rather than a second implementation.
+
+### Commands
+
+```bash
+cd frontend && npm add microsoft-cognitiveservices-speech-sdk@1.51.0
+uv run --project backend --locked --no-sync ruff check .
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | |
+|---|---|
+| Live interim text while speaking | **yes** |
+| Auto-send | **no**, unchanged |
+| SDK in initial page load | **no** — 378 KB chunk is lazy |
+| Subscription key in the browser | **no** — ten-minute token |
+| Pipeline steps changed | **none** |
+| Fallback when streaming fails | records and posts to `/transcribe` |
+
+### Checkpoint
+
+- [x] Words appear while talking and commit when the phrase finalises.
+- [x] The textarea only ever holds finalised text.
+- [x] The SDK is code-split, verified against the built chunks rather than assumed.
+- [x] The resource key never leaves the backend.
+- [x] Walked in a browser with a real microphone.
+- [ ] The first mic click pauses while 378 KB downloads. Prefetching on idle would hide it.
+- [ ] `canceled` surfaces Azure's raw `errorDetails` — useful now, probably too raw for a demo.
+- [ ] The fallback path has not been exercised against a network that actually blocks WebSockets.

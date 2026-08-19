@@ -140,7 +140,7 @@ flowchart TB
     band -->|no| dom{"grader<br/>about the domain?"}
     dom -->|no| dec["decline"]
     dom -->|yes| ans{"grader<br/>passages answer it?"}
-    ans -->|yes| low{"score<br/>above GATE_LOW −7.5?"}
+    ans -->|yes| low{"score<br/>above GATE_LOW −7.85?"}
     low -->|yes| m2["manual"]
     low -->|no| mg["manual+general"]
     ans -->|no| saf{"grader<br/>safety topic?"}
@@ -259,7 +259,9 @@ handoff then resets the counter, or every later turn in the session would escala
 
 ## Transport
 
-`POST /chat` returns Server-Sent Events. FastAPI `StreamingResponse`; no broker, no WebSocket server.
+`POST /chat` returns Server-Sent Events. FastAPI `StreamingResponse`; no broker, and this app runs no
+WebSocket server. Live dictation does open a WebSocket, but the browser opens it directly to Azure
+with a short-lived token; no audio and no socket passes through this backend (D36).
 
 | Route | Purpose |
 |---|---|
@@ -270,7 +272,8 @@ handoff then resets the counter, or every later turn in the session would escala
 | `GET /sessions/{id}` | one conversation with its messages and citations |
 | `DELETE /sessions/{id}` | removes the conversation, its messages and any handoff raised from it (D25) |
 | `POST /chat` | `{session_id, question}` → the stream below |
-| `POST /transcribe` | raw audio bytes → `{text}`; the text is returned, never sent (D35) |
+| `POST /transcribe` | raw audio bytes → `{text}`; the fallback path when streaming cannot start (D35) |
+| `GET /speech/token` | ten-minute Azure Speech token + region; the resource key stays server-side (D36) |
 | `GET /escalations` | operator inbox; optional `?status=open` |
 | `GET /escalations/{id}` | the full handoff package, transcript included |
 | `POST /escalations/{id}/reply` | an agent's turn, written into the user's session as `role="agent"` (D24) |
@@ -385,33 +388,39 @@ are solid and drive the pane, web pills are dashed and open a tab. Repeated page
 
 ## Evaluation
 
-`eval/questions.jsonl` — 44 labelled questions, one row each:
+`eval/questions.jsonl` — 74 labelled questions, one row each:
 
 ```json
 {"id": "bj30-01", "question": "...", "manual": "...", "expected_pages": [89, 90],
  "expected_route": "manual", "kind": "procedure"}
 ```
 
-`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 59 rows cover four of the
-five: `manual` 41, `escalate` 12, `general` 4, `decline` 2. **`manual+general` has no labelled rows, so
-that path is unmeasured.** `kind` is `procedure` 21, `safety` 15, `spec` 10, `symptom` 5, `absent` 4,
-`handoff` 2, `offtopic` 2, so weakness can be located rather than just observed. Pages are labelled
-from the source text, never from retrieval output.
+`expected_route` uses the `Route` vocabulary from `pipeline/base.py`. The 74 rows cover five of the
+six: `manual` 46, `escalate` 12, `acknowledge` 7, `decline` 5, `general` 4. **`manual+general` still has
+no labelled rows, so that path is unmeasured** — though the system has been observed producing it,
+which is how `noise-05` was found. `kind` is `procedure` 21, `safety` 15, `spec` 10, `conversational`
+10, `symptom` 5, `noisy` 5, `absent` 4, `handoff` 2, `offtopic` 2, so weakness can be located rather
+than just observed. `conversational` covers greetings, thanks and questions about the assistant;
+`noisy` rows are degraded paraphrases of existing rows, reusing their expected pages so that
+transcription noise is the only variable. Pages are labelled from the source text, never from
+retrieval output.
 
-Six rows carry an optional `history` array of earlier turns, and one an optional `streak`. The harness
+Twelve rows carry an optional `history` array of earlier turns, and one an optional `streak`. The harness
 puts those through `read()` and `next_streak()` before searching, the same calls `ResolveQueryStep`
 makes, so follow-up and escalation-counter behaviour are measured rather than assumed. A row with
 neither field is untouched by that path.
 
 `eval/run.py` reports Recall@1/3/5/10 and MRR, split by manual and by kind, scoring fusion order
 against reranked order over the same candidates. It then reports **routing accuracy** for the gate
-exactly as it runs at query time — the grader is called only at or below `GATE_HIGH`, so a row that
-bypasses in production bypasses here — and lists every misroute with its score and band. The answer
-step is never called and answer prose is never scored.
+exactly as it runs at query time — every question is graded, as it has been since D22, and the band
+decides only how much authority the verdict carries — and lists every misroute with its score and
+band. The answer step is never called and answer prose is never scored.
 
-Two caveats on that number. The grader is not fully deterministic even at temperature 0, so rows
-sitting near a band can change route between runs (`bj30-02` and `bj30-16` trade places); a single run
-is not proof, and every figure here should be read as ±2 rows.
+Two caveats on that number. Model calls are not deterministic even at temperature 0 — the API's `seed`
+parameter is ignored by this deployment, measured over eight runs with and without — so rows sitting
+near a band change route between runs. Five are known to: `bj30-17`, `esc-02`, `x55-12`, `meta-01` and
+`meta-06`. Three consecutive runs of identical code returned 99%, 95% and 95%, so **a single run is not
+proof and every figure here should be read as ±3 rows**. Quote the range, never a run (D32).
 And accuracy counts misroutes equally when their costs are not equal — a safety question answered
 confidently from the manual is far worse than a covered question answered from general knowledge.
 

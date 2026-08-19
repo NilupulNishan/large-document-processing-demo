@@ -5,7 +5,8 @@ get an answer in a format suited to the question with the cited page shown besid
 cannot resolve it, the system searches the web if the question is in scope. When nothing resolves it,
 it hands off to a human with full context.
 
-Runs entirely locally. Azure OpenAI and Tavily are the only network calls.
+Questions can be typed or dictated. Runs entirely locally; Azure OpenAI, Azure Speech and Tavily are
+the only network calls.
 
 ## Documents
 
@@ -29,11 +30,11 @@ backend/          FastAPI app, pipeline steps, providers
     api.py        HTTP routes and SSE framing
     db.py         SQLite — manuals, sessions, messages
     pipeline/     resolve_query → retrieve → rerank → gate → web_search → answer → escalate
-    providers/    Azure, LanceDB, Docling, Tavily adapters — SDK types stop here
+    providers/    Azure OpenAI, Azure Speech, LanceDB, Docling, Tavily — SDK types stop here
 frontend/         Next.js UI: manual picker, chat, PDF pane, session history, operator inbox
-  src/lib/        config.ts and api.ts — the only place the wire format is known
+  src/lib/        config.ts, api.ts and audio.ts — the only place the wire format is known
   src/types/      the backend contract, mirrored so a change there fails the type check
-  src/hooks/      use-chat-stream.ts and use-polled-messages.ts — the stateful pieces
+  src/hooks/      use-chat-stream.ts, use-polled-messages.ts, use-dictation.ts — the stateful pieces
   src/components/ chat/, pdf/, source/, inbox/, layout/ — presentational
 eval/             questions.jsonl + run.py — the test suite for this project
 playground/       Experiment scripts. Not application code.
@@ -124,6 +125,7 @@ Questions that exercise each route:
 | "What does the warranty cover?" | `source=general`, a `web` event, `[web]` citations |
 | "Write me a poem about the sea" | `decline`, one short refusal, no answer call |
 | "hi" as the opening message | `acknowledge` — nothing searched, graded or answered (D28) |
+| the mic button, then talk | words appear as you speak and stay in the box; nothing is sent (D36) |
 
 Two step events are worth watching. A `web` event appears only on the `general` route; on a
 manual-answered question it means the gate misrouted. A `resolve_query` event appears on every turn,
@@ -170,7 +172,7 @@ npm run build
 
 Built: ingestion, embedding and indexing; the full
 `resolve_query → retrieve → rerank → gate → web_search → answer → escalate` pipeline; SSE transport;
-session persistence; the chat and PDF screens.
+session persistence; the chat, PDF and operator inbox screens; voice input, live and streamed.
 
 Not built: D14's fourth escalation trigger (manual weak **and** web weak), and D4's LLM-written
 context sentence at ingest. `docs/architecture.md` marks each `(not built)` and is kept in step with
@@ -180,7 +182,9 @@ Three known gaps, all measured and recorded rather than hidden:
 
 - `x55-08` retrieves nothing that explains hill descent control: the chunk that does say only "HDC"
   and carries a meaningless heading. D4's context sentence is the fix, and is not built.
-- The grader disagrees with itself on a minority of the rows it decides, so a question sitting near
-  a band can route differently between runs. Every routing number here should be read as ±2 rows.
+- Model calls are not deterministic even at temperature 0, and this deployment ignores the API's
+  `seed` parameter, so a question sitting near a band routes differently between runs. Five rows are
+  known to move. Three runs of identical code gave 99%, 95% and 95% — read every routing number as a
+  range of ±3 rows, never as a single figure.
 - `bj30-23` — the trailer weight sits in a table row the grader reads as not answering the question.
   Neither table serialisation fixed it (D16).
