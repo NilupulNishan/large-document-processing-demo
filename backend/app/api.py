@@ -94,7 +94,14 @@ def session(session_id: str) -> dict:
     found = db.get_session(session_id)
     if found is None:
         raise HTTPException(404, "No such session")
-    return {**found, "messages": db.list_messages(session_id)}
+    return {
+        **found,
+        "messages": db.list_messages(session_id),
+        # The same check POST /chat makes, so the screen and the pipeline can never
+        # disagree about whether a person currently owns this conversation. A closed
+        # handoff hands it back, and the client has to be able to see that.
+        "handed_over": db.open_escalation_for_session(session_id) is not None,
+    }
 
 
 @app.delete("/sessions/{session_id}")

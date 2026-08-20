@@ -1358,3 +1358,40 @@ rather than a bare disable comment.
 
 Worth knowing for anyone who meets it: the rule traces *into* `jump()`, so the effect was always
 setting state this way. Adding the ring is what made it visible to the linter, not what introduced it.
+
+---
+
+## D41 — The inbox is a queue an operator works, not a screen they read
+
+**Decision.** `PATCH /escalations/{id}` gets a client at last. The package view offers **Pick up** and
+**Close**; the list filters by Open / Picked up / Closed with live counts. This supersedes D23's
+read-only rule, as D24 already did for replies.
+
+**Why the rule goes.** D23 made the inbox read-only to keep the first version small, and D24 broke that
+for replies the same day it was written. Status was the last thing left behind: `escalation-list.tsx`
+carried the comment *"Status is shown, never changed here — the endpoint exists, the screen does not
+use it."* The endpoint had existed since Slice 15 with **no client function at all**, so `lib/api.ts`
+had no `patch` helper either.
+
+An inbox where two agents cannot tell whether anyone has picked a question up is not an inbox. And the
+pitch's own framing — an escalation is a qualified lead, not a support cost — only works if the screen
+shows someone acting on it.
+
+**Optimistic, then corrected.** The status moves on screen before the request returns, because a button
+that looks dead for a round trip gets pressed twice. A failure reverts it, and the next load takes the
+server's value. Selecting a different handoff drops any optimistic status — adjusted **during render**
+with a comparison, the pattern `pdf-toolbar.tsx` already uses, not in an effect.
+
+**Who owns a conversation is answered by the server, once.** Making the status changeable exposed
+that the client had been deriving it from *"does any message carry an `escalation_id`?"* — permanent,
+so a closed handoff still read as open forever. `GET /sessions/{id}` now returns `handed_over` from
+the same `open_escalation_for_session` that `POST /chat` calls, and polling reads it, so the screen
+cannot disagree with the pipeline about who is answering. Closing hands the conversation back;
+**Pick up does not**, because a picked-up handoff still belongs to the person holding it.
+
+**The transcript is adopted when a handoff ends.** Agent replies arrive only through polling, so
+switching back to the locally streamed `messages` would have deleted them from the customer's view.
+That reads as data loss rather than a display bug, which is what makes it worth a decision entry.
+
+**A live pulse only where something waits.** Open rows pulse; picked-up and closed rows do not. Motion
+here means "this is waiting on you", so spending it on a closed row would make it decoration.

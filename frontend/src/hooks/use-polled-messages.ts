@@ -25,6 +25,9 @@ export function usePolledMessages(
   maxMs = 15000,
 ) {
   const [messages, setMessages] = useState<StoredMessage[]>([]);
+  // Polled too, because an agent can close the handoff while the customer is sitting
+  // here and the screen must not keep claiming a person has it.
+  const [handedOver, setHandedOver] = useState(true);
   const lastRef = useRef<StoredMessage[]>([]);
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export function usePolledMessages(
       try {
         const session = await loadSession(sessionId);
         if (stopped) return;
+        setHandedOver(session.handed_over);
         if (same(lastRef.current, session.messages)) {
           // Nothing said. Ease off rather than asking again immediately.
           delay = Math.min(delay * 2, maxMs);
@@ -75,5 +79,5 @@ export function usePolledMessages(
     };
   }, [sessionId, active, everyMs, maxMs]);
 
-  return messages;
+  return { messages, handedOver };
 }

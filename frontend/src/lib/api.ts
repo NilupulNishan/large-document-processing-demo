@@ -26,6 +26,16 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return response.json();
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+
 async function del<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
@@ -67,8 +77,14 @@ export type StoredMessage = {
   escalation_reason: string | null;
 };
 
-export const loadSession = (id: string) =>
-  get<SessionSummary & { messages: StoredMessage[] }>(`/sessions/${id}`);
+/** `handed_over` is the server's live answer to "does a person own this?", derived from the
+ *  escalation's status. A closed handoff returns the conversation to the pipeline. */
+export type SessionDetail = SessionSummary & {
+  messages: StoredMessage[];
+  handed_over: boolean;
+};
+
+export const loadSession = (id: string) => get<SessionDetail>(`/sessions/${id}`);
 
 export const pdfUrl = (manualId: string) =>
   `${API_BASE}/manuals/${manualId}/pdf`;
@@ -94,6 +110,11 @@ export const replyToEscalation = (id: string, text: string) =>
   post<StoredMessage>(`/escalations/${id}/reply`, { text });
 export const loadEscalation = (id: string) =>
   get<EscalationPackage>(`/escalations/${id}`);
+
+/** Moves a handoff through the queue. Supersedes D23's read-only inbox, as D24 already did
+ *  for replies. */
+export const setEscalationStatus = (id: string, status: EscalationSummary["status"]) =>
+  patch<EscalationSummary>(`/escalations/${id}`, { status });
 
 /**
  * Stream one answer. Yields typed frames as they arrive rather than buffering,

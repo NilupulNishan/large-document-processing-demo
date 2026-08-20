@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Inbox } from "lucide-react";
 import AppHeader from "@/components/layout/app-header";
 import EscalationList from "./escalation-list";
@@ -13,6 +13,12 @@ export default function InboxShell() {
   const [selected, setSelected] = useState<string | null>(null);
   const [pkg, setPkg] = useState<EscalationPackage | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"open" | "picked_up" | "closed">("open");
+
+  const refresh = useCallback(
+    () => listEscalations().then(setItems).catch(() => setItems([])),
+    [],
+  );
 
   // A reference can be deep-linked, so /inbox?id=ESC-XXXXXX opens straight to it.
   useEffect(() => {
@@ -43,6 +49,19 @@ export default function InboxShell() {
   // Derived rather than stored: a loading flag set in the effect body is a cascading render.
   const loading = selected !== null && loadedId !== selected;
 
+  const counts = useMemo(
+    () => ({
+      open: items.filter((item) => item.status === "open").length,
+      picked_up: items.filter((item) => item.status === "picked_up").length,
+      closed: items.filter((item) => item.status === "closed").length,
+    }),
+    [items],
+  );
+  const shown = useMemo(
+    () => items.filter((item) => item.status === filter),
+    [items, filter],
+  );
+
   const waiting = items.filter((item) => item.status === "open").length;
 
   return (
@@ -59,13 +78,40 @@ export default function InboxShell() {
             <span className="text-small text-ink-3">{items.length}</span>
           </div>
 
+          <div className="mb-3 flex gap-1.5">
+            {(
+              [
+                ["open", "Open"],
+                ["picked_up", "Picked up"],
+                ["closed", "Closed"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                aria-pressed={filter === key}
+                className={`h-7 rounded-full px-2.5 text-small font-semibold transition-colors ${
+                  filter === key
+                    ? "bg-ink text-white"
+                    : "border border-line text-ink-2 hover:bg-surface"
+                }`}
+              >
+                {label} {counts[key]}
+              </button>
+            ))}
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <EscalationList items={items} selected={selected} onSelect={setSelected} />
+            <EscalationList items={shown} selected={selected} onSelect={setSelected} />
           </div>
         </aside>
 
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-divider">
-          <EscalationPackageView pkg={pkg} loading={loading} />
+          <EscalationPackageView
+            pkg={pkg}
+            loading={loading}
+            onStatusChange={refresh}
+          />
         </main>
       </div>
     </div>

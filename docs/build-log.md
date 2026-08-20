@@ -2919,3 +2919,99 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
       exists on the backend but `lib/api.ts` has **no client function for it**, so the design promises
       a capability the frontend cannot perform. Either build it or take it out of the artboard.
 - [ ] The header's manual switcher is a native `<select>`, not the artboard's drawn control.
+
+---
+
+## Slice 31 — the inbox stops being read-only
+
+### Outcome
+
+The operator inbox joins the design system and becomes a working queue: Pick up, Close, and filters
+by status with live counts. **No component in the app carries the old palette any more.**
+
+### The endpoint had a client-shaped hole in front of it
+
+`PATCH /escalations/{id}` has existed since Slice 15. `lib/api.ts` had no function for it — and no
+`patch` helper at all — so the status could be read and never changed. `escalation-list.tsx` even
+carried a comment saying so: *"Status is shown, never changed here — the endpoint exists, the screen
+does not use it."*
+
+D23 made the inbox read-only to keep the first version small; D24 broke that for replies the same day.
+Status was the last piece still bound by a rule the project had already moved past. An inbox where two
+agents cannot see whether anyone has picked a question up is not an inbox (D41).
+
+### Two mistakes the checks caught, in different ways
+
+**An infinite render loop.** Resetting the optimistic status when the selected handoff changes is
+correctly done during render with a comparison — the pattern `pdf-toolbar.tsx` already uses. But
+`pkg?.id` is `undefined` with nothing selected and the stored value was `null`, so the two were never
+equal, the guard never settled, and React bailed out.
+
+**`tsc` and `eslint` both passed it.** Only `next build` failed, while prerendering `/inbox`. Worth
+remembering: a render loop is not a type error and not a lint error, and two of the three checks will
+wave it through.
+
+**A lint rule I suppressed one slice ago, I did not need here.** The same
+`react-hooks/set-state-in-effect` fired on the status reset, and this time the render-time pattern
+removed it properly. That makes the suppression in `pdf-viewer.tsx` (D40) worth revisiting — it was
+reached for faster than it should have been.
+
+### Making the status changeable exposed that the client could never observe it
+
+Found in the browser, immediately: close a handoff, and the customer's composer still said
+*"A specialist has this conversation"* while the assistant happily answered the next question.
+
+The behaviour was right. `open_escalation_for_session` matches `status != 'closed'`, so closing
+returns the conversation to the pipeline by design, and **Pick up deliberately does not** — a
+picked-up handoff still belongs to the person. What was wrong was the screen.
+
+The client decided who owned the conversation by asking *"does any message carry an
+`escalation_id`?"* That is **permanent**. Once a handoff had ever existed the answer was yes forever,
+so a closed handoff still read as open and nothing could ever change it back.
+
+The backend already held the one true answer — the same `open_escalation_for_session` that
+`POST /chat` calls. `GET /sessions/{id}` simply never returned it. It now reports `handed_over`, so
+the screen and the pipeline read one source and cannot disagree. Polling reads it too, so an agent
+closing a handoff updates the customer's composer within a couple of seconds without a reload.
+
+**A second bug was hiding behind the first.** When `handedOver` flips false the transcript switches
+from the polled copy back to `messages` — which never received the agent's replies, because those
+only ever arrived through polling. Closing a handoff would have made **every agent turn vanish from
+the customer's screen**. It looks like data loss rather than a display bug, and it was one browser
+click away. The polled transcript is now adopted at the moment the conversation is handed back.
+
+This is the third `react-hooks/set-state-in-effect` of the week and the second resolved properly:
+the handover-back adjustment is made during render, gated by the very state it sets, so it settles on
+the next pass. Three places in this codebase now use that pattern.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Components on the old palette | 3 | **0** |
+| Closing a handoff | composer kept claiming a person had it | **returns to normal within ~2s** |
+| Agent replies after a close | would have vanished | **kept** |
+| `PATCH /escalations/{id}` client | none | **`setEscalationStatus`** |
+| Moving a handoff through the queue | impossible from the UI | **Pick up / Close** |
+| Filtering | none | **Open / Picked up / Closed, with counts** |
+| Pulse | on every row | **only where something is waiting** |
+
+### Checkpoint
+
+- [x] The inbox can move a handoff through its states.
+- [x] Every component is on the design system.
+- [x] Optimistic status reverts on failure and is dropped when the selection changes.
+- [x] Walked in a browser. The scroll fix, the citation ring and the inbox all behave; the handoff
+      lifecycle bug above was found this way and nothing else would have caught it.
+- [x] Closing a handoff returns the conversation to the pipeline **and says so on both screens**.
+- [ ] The artboards now disagree with the code in three places: the Components sheet draws 44px
+      citation pills against 32px shipped, States draws nine composer states against ten, and Main
+      draws an account avatar that was deliberately not built.
+- [ ] The agent's reply box has no dictation control, unlike the customer's composer.

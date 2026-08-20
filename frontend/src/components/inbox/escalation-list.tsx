@@ -1,6 +1,5 @@
 "use client";
 
-import { CircleDot, CircleCheck, CircleDashed } from "lucide-react";
 import type { EscalationSummary } from "@/types/chat";
 
 type Props = {
@@ -9,11 +8,11 @@ type Props = {
   onSelect: (id: string) => void;
 };
 
-/** Read-only. Status is shown, never changed here — the endpoint exists, the screen does not use it. */
+/** Status is a queue position, so it reads as a colour with a shape, never colour alone. */
 const STATUS = {
-  open: { label: "Open", icon: CircleDot, className: "text-amber-600" },
-  picked_up: { label: "Picked up", icon: CircleDashed, className: "text-sky-600" },
-  closed: { label: "Closed", icon: CircleCheck, className: "text-slate-400" },
+  open: { label: "Open", className: "border-general-line bg-general-soft text-general" },
+  picked_up: { label: "Picked up", className: "border-manual-line bg-manual-soft text-manual" },
+  closed: { label: "Closed", className: "border-divider bg-raised text-ink-3" },
 } as const;
 
 function ago(iso: string) {
@@ -27,9 +26,9 @@ function ago(iso: string) {
 export default function EscalationList({ items, selected, onSelect }: Props) {
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-        <p className="font-medium text-slate-700">No handoffs yet.</p>
-        <p className="mt-2 leading-6">
+      <div className="rounded border border-dashed border-line p-5 text-body text-ink-2">
+        <p className="font-semibold text-ink">No handoffs yet.</p>
+        <p className="mt-2 leading-5">
           A question reaches this screen when the gate will not answer it — ask the X55 what
           torque to tighten the wheel nuts to, and it will appear here with its reference.
         </p>
@@ -38,31 +37,46 @@ export default function EscalationList({ items, selected, onSelect }: Props) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-1.5">
       {items.map((item) => {
         const status = STATUS[item.status] ?? STATUS.open;
-        const Icon = status.icon;
         const active = item.id === selected;
+        const waiting = item.status === "open";
         return (
           <button
             key={item.id}
             onClick={() => onSelect(item.id)}
-            className={`w-full rounded-xl border p-3 text-left transition ${
+            aria-current={active ? "true" : undefined}
+            className={`rounded border-l-2 p-3 text-left transition-colors ${
               active
-                ? "border-indigo-200 bg-indigo-50/60 shadow-sm"
-                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                ? "border-l-person bg-person-soft/50"
+                : "border-l-transparent hover:bg-raised"
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-xs font-semibold text-slate-900">{item.id}</span>
-              <span className={`flex items-center gap-1 text-[11px] font-medium ${status.className}`}>
-                <Icon className="h-3.5 w-3.5" />
-                {status.label}
+            <div className="flex items-center gap-2">
+              {/* A live pulse only where something is actually waiting on a person. */}
+              <span className="relative grid h-2 w-2 shrink-0 place-items-center">
+                {waiting && (
+                  <span className="animate-live absolute inset-0 rounded-full bg-person" />
+                )}
+                <span
+                  className={`h-2 w-2 rounded-full ${waiting ? "bg-person" : "bg-ink-4"}`}
+                />
               </span>
+              <span className="font-mono text-small font-semibold text-ink-2">{item.id}</span>
+              <span className="ml-auto text-small text-ink-3">{ago(item.created_at)}</span>
             </div>
-            <p className="mt-1.5 line-clamp-2 text-sm text-slate-700">{item.question}</p>
-            <p className="mt-1.5 line-clamp-1 text-[11px] text-slate-500">{item.reason}</p>
-            <p className="mt-1 text-[11px] text-slate-400">{ago(item.created_at)}</p>
+
+            <p className="mt-1.5 line-clamp-2 text-body font-semibold text-ink">
+              {item.question}
+            </p>
+            <p className="mt-1 line-clamp-1 text-small text-ink-2">{item.reason}</p>
+
+            <span
+              className={`mt-2 inline-block rounded border px-1.5 py-0.5 text-small font-semibold ${status.className}`}
+            >
+              {status.label}
+            </span>
           </button>
         );
       })}

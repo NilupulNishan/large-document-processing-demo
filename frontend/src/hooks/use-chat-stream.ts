@@ -40,6 +40,7 @@ export function useChatStream(sessionId: string | null) {
   const [handedOver, setHandedOver] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const polled = usePolledMessages(sessionId, handedOver);
+  const polledMessages = polled.messages;
 
   // Reopening a conversation restores it from the server, citations included.
   useEffect(() => {
@@ -50,9 +51,10 @@ export function useChatStream(sessionId: string | null) {
       .then((session) => {
         if (ignore) return;
         setMessages(session.messages.map(fromStored));
-        // A conversation that was handed over stays handed over when reopened, so replies
-        // from the agent keep arriving without the pipeline being consulted.
-        setHandedOver(session.messages.some((stored) => stored.escalation_id !== null));
+        // The server's live answer, not a guess from the transcript: an escalation_id is
+        // permanent, so deriving it from the messages meant a closed handoff still read as
+        // open forever.
+        setHandedOver(session.handed_over);
       })
       .catch(() => {
         if (!ignore) setMessages([]);
@@ -154,11 +156,22 @@ export function useChatStream(sessionId: string | null) {
    *  pipeline is not cancelled; only this client stops listening to it. */
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
+  // An agent closing the handoff returns the conversation to the pipeline. Adopt what
+  // polling collected before letting go of it, or every agent turn would vanish the
+  // moment the screen stopped reading from the poll.
+  //
+  // Adjusted during render rather than in an effect, as pdf-toolbar and the escalation
+  // package do. It settles on the next render because handedOver is what gates it.
+  if (handedOver && !polled.handedOver) {
+    if (polledMessages.length > 0) setMessages(polledMessages.map(fromStored));
+    setHandedOver(false);
+  }
+
   // While a person has it, the server is the truth: their replies arrive by polling, and
   // nothing here is streaming.
   const shown = useMemo(
-    () => (handedOver && polled.length > 0 ? polled.map(fromStored) : messages),
-    [handedOver, polled, messages],
+    () => (handedOver && polledMessages.length > 0 ? polledMessages.map(fromStored) : messages),
+    [handedOver, polledMessages, messages],
   );
 
   // Derived, not reset in an effect: with no session there is nothing to show.
