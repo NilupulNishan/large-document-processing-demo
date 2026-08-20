@@ -3017,3 +3017,64 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
       citation pills against 32px shipped, States draws nine composer states against ten, and Main
       draws an account avatar that was deliberately not built.
 - [ ] The agent's reply box has no dictation control, unlike the customer's composer.
+
+---
+
+## Slice 32 — the agent can dictate too
+
+### Outcome
+
+Dictation on the operator's reply box, sharing one button with the customer's composer. An agent
+reading a torque figure off a workshop manual can say it rather than type it while someone waits.
+
+### Shared the button, not the composer
+
+`useDictation` was already the shared state. What would have duplicated is the button's own
+presentation — the pulsing ring while listening, the spinner while starting or transcribing, the stop
+square — and that is precisely the kind of thing that drifts once it exists twice.
+
+`components/chat/mic-button.tsx` is presentational only: `{ state, onStart, onStop, disabled }`. The
+two composers keep their own `useDictation` instances and render interim text and status where each
+has room. Verified there is exactly one copy of the ring markup in the tree.
+
+**No `tone` prop.** The idle mic is neutral and the listening mic is red on both sides, so the accent
+never differed and a prop for it would have been invented complexity.
+
+### The same rule about half-heard sentences
+
+Send is disabled while a guess is outstanding, as on the customer side. An agent firing a
+half-recognised sentence at a customer is worse than a customer doing it to themselves — it arrives
+badged as a person and cannot be taken back.
+
+### The composers are not the same and were not forced to be
+
+The customer's composer expresses ten states; the agent's needs a fraction of that — no `handedOver`,
+no `busy`, no stop-the-answer. Reusing `chat-input.tsx` wholesale would have meant threading
+irrelevant props through the inbox to reach a different-looking control. The button is the part worth
+sharing, and it is the part that was shared.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Dictation in the agent portal | none | **yes** |
+| Copies of the mic button markup | 1 | **1**, now shared by 2 callers |
+| Agent send while a guess is outstanding | allowed | **disabled** |
+| New dependency | — | none; the SDK was already lazy-loaded |
+
+### Checkpoint
+
+- [x] The agent can dictate, and the words append rather than replace a half-typed reply.
+- [x] One mic button, two callers, no duplicated presentation.
+- [x] A half-recognised sentence cannot be sent by either side.
+- [ ] **Not walked in a browser.** The customer's dictation path was verified; the agent's has not
+      been spoken to.
+- [ ] The inbox now pays the 7 MB SDK download on an agent's first mic press, same as the chat side.
+      Lazy, so nothing is paid until then.

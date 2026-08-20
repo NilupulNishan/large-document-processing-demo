@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, SendHorizonal, Square, UserRound } from "lucide-react";
+import { SendHorizonal, Square, UserRound } from "lucide-react";
 
+import MicButton from "./mic-button";
 import { useDictation } from "@/hooks/use-dictation";
 
 type Props = {
@@ -56,7 +57,6 @@ export default function ChatInput({
                   : { hint: "Enter to send, Shift + Enter for a new line", tone: "quiet" };
 
   const locked = !ready || busy || transcribing;
-  const micBusy = starting || transcribing;
   // A guess still being revised is not a sentence anyone meant to send.
   const canSend = typed && !locked && !listening && !starting && !dictation.interim;
 
@@ -110,31 +110,12 @@ export default function ChatInput({
             }}
           />
 
-          <button
-            type="button"
-            onClick={listening ? dictation.stop : dictation.start}
-            disabled={!ready || busy || micBusy}
-            className={`relative grid h-9 w-9 shrink-0 place-items-center rounded transition-colors active:scale-95 ${
-              listening
-                ? "bg-danger text-white"
-                : "border border-line text-ink-2 hover:bg-raised disabled:text-ink-4"
-            }`}
-            aria-label={listening ? "Stop recording" : "Dictate a question"}
-          >
-            {listening && (
-              <span
-                aria-hidden
-                className="animate-live absolute inset-0 rounded border-2 border-danger"
-              />
-            )}
-            {micBusy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : listening ? (
-              <Square className="h-3.5 w-3.5" fill="currentColor" />
-            ) : (
-              <Mic className="h-4 w-4" strokeWidth={1.7} />
-            )}
-          </button>
+          <MicButton
+            state={dictation.state}
+            onStart={dictation.start}
+            onStop={dictation.stop}
+            disabled={!ready || busy}
+          />
 
           {/* While answering, the same slot stops the answer. Saying "stop" and not stopping
               would be worse than not offering it. */}

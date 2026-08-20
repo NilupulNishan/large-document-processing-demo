@@ -9,12 +9,14 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import MessageItem from "@/components/chat/message-item";
+import MicButton from "@/components/chat/mic-button";
 import {
   replyToEscalation,
   setEscalationStatus,
   type EscalationPackage,
   type StoredMessage,
 } from "@/lib/api";
+import { useDictation } from "@/hooks/use-dictation";
 import { usePolledMessages } from "@/hooks/use-polled-messages";
 import type { Message } from "@/types/chat";
 
@@ -59,6 +61,11 @@ export default function EscalationPackageView({
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Dictated words are appended, never substituted, so a half-typed reply survives.
+  const dictation = useDictation((text) =>
+    setDraft((current) => (current ? `${current.trimEnd()} ${text}` : text)),
+  );
+
   // Polled while the handoff is open, so the customer's replies arrive without a refresh.
   const polled = usePolledMessages(
     pkg?.session_id ?? null,
@@ -101,7 +108,7 @@ export default function EscalationPackageView({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!pkg || !text || sending || closed) return;
+    if (!pkg || !text || sending || closed || dictation.interim) return;
     setSending(true);
     try {
       await replyToEscalation(pkg.id, text);
@@ -229,17 +236,44 @@ export default function EscalationPackageView({
       ) : (
         <form
           onSubmit={submit}
-          className="flex items-center gap-2 border-t border-divider px-6 py-3"
+          className="flex items-start gap-2 border-t border-divider px-6 py-3"
         >
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Reply to the customer…"
-            className="h-9 min-w-0 flex-1 rounded border border-line px-3 text-body text-ink outline-none transition-colors focus:border-person"
+          <div className="min-w-0 flex-1">
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Reply to the customer…"
+              className="h-9 w-full rounded border border-line px-3 text-body text-ink outline-none transition-colors focus:border-person"
+            />
+            {(dictation.interim || dictation.error || dictation.state !== "idle") && (
+              <p className="mt-1.5 truncate text-small text-ink-2">
+                {dictation.interim ? (
+                  <span className="animate-breathe">{dictation.interim}</span>
+                ) : dictation.error ? (
+                  <span className="text-general">{dictation.error}</span>
+                ) : dictation.state === "listening" ? (
+                  "Listening, press stop when you are done"
+                ) : (
+                  "Opening the microphone"
+                )}
+              </p>
+            )}
+          </div>
+
+          <MicButton
+            state={dictation.state}
+            onStart={dictation.start}
+            onStop={dictation.stop}
           />
+
           <button
             type="submit"
-            disabled={sending || !draft.trim()}
+            disabled={
+              sending ||
+              !draft.trim() ||
+              dictation.state !== "idle" ||
+              Boolean(dictation.interim)
+            }
             className="flex h-9 items-center gap-1.5 rounded bg-person px-3.5 text-body font-semibold text-white transition-colors hover:brightness-110 disabled:bg-divider disabled:text-ink-4"
           >
             <Send className="h-3.5 w-3.5" />
