@@ -79,6 +79,7 @@ export function useChatStream(sessionId: string | null) {
       if (!sessionId || busy) return;
 
       setBusy(true);
+      const startedAt = Date.now();
       setMessages((previous) => [
         ...previous,
         blank("user", question),
@@ -137,13 +138,21 @@ export function useChatStream(sessionId: string | null) {
         }));
       } finally {
         // A stream that ends without `done` must not leave the caret spinning.
-        patchLast((message) => ({ ...message, streaming: false }));
+        patchLast((message) => ({
+          ...message,
+          streaming: false,
+          elapsedMs: Date.now() - startedAt,
+        }));
         setBusy(false);
         abortRef.current = null;
       }
     },
     [sessionId, busy, patchLast],
   );
+
+  /** Stops reading the stream and finalises the part-written answer. The server-side
+   *  pipeline is not cancelled; only this client stops listening to it. */
+  const stop = useCallback(() => abortRef.current?.abort(), []);
 
   // While a person has it, the server is the truth: their replies arrive by polling, and
   // nothing here is streaming.
@@ -153,5 +162,5 @@ export function useChatStream(sessionId: string | null) {
   );
 
   // Derived, not reset in an effect: with no session there is nothing to show.
-  return { messages: sessionId ? shown : [], send, busy, handedOver };
+  return { messages: sessionId ? shown : [], send, stop, busy, handedOver };
 }

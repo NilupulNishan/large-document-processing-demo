@@ -100,6 +100,11 @@ body {
     opacity: 0;
   }
 }
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
 @keyframes breathe {
   0%,
   100% {
@@ -121,6 +126,9 @@ body {
 }
 .animate-breathe {
   animation: breathe 2.6s ease-in-out infinite;
+}
+.animate-caret {
+  animation: blink 1s step-end infinite;
 }
 
 /* Motion here is decoration over information, never the information itself, so it is

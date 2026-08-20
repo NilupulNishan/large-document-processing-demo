@@ -25,7 +25,7 @@ export default function AppShell() {
   const [page, setPage] = useState(1);
   const [openHandoffs, setOpenHandoffs] = useState(0);
 
-  const { messages, send, busy } = useChatStream(sessionId);
+  const { messages, send, stop, busy, handedOver } = useChatStream(sessionId);
 
   const refreshSessions = useCallback(() => {
     listSessions().then(setSessions).catch(() => setSessions([]));
@@ -147,7 +147,9 @@ export default function AppShell() {
                   messages={messages}
                   busy={busy}
                   ready={Boolean(sessionId)}
+                  handedOver={handedOver}
                   onSend={send}
+                  onStop={stop}
                   onPageClick={setPage}
                 />
               </div>

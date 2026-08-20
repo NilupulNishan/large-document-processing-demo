@@ -179,6 +179,9 @@ export default function MessageItem({ message, onPageClick, viewer = "user" }: P
         >
           <Check className="h-3.5 w-3.5 text-person" strokeWidth={2.5} />
           {message.steps.length} steps
+          {message.elapsedMs !== undefined && (
+            <span className="text-ink-3">· {(message.elapsedMs / 1000).toFixed(1)}s</span>
+          )}
           <ChevronDown
             className={`h-3 w-3 text-ink-3 transition-transform ${openTrace ? "rotate-180" : ""}`}
             strokeWidth={2}
@@ -198,7 +201,7 @@ export default function MessageItem({ message, onPageClick, viewer = "user" }: P
             {message.content}
           </ReactMarkdown>
         ) : streaming && message.steps.length === 0 ? (
-          <span className="inline-block h-4 w-0.5 animate-pulse bg-action align-middle" />
+          <span className="animate-caret inline-block h-4 w-0.5 bg-action align-middle" />
         ) : null}
       </div>
 

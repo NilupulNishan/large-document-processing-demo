@@ -86,4 +86,7 @@ export type Message = {
   failed?: boolean;
   /** Set instead of `source` when the question was handed to a person. */
   escalation?: Escalation;
+  /** Wall time the answer took, measured in the browser. Not part of the backend
+   *  contract the rest of this file mirrors, and absent on restored conversations. */
+  elapsedMs?: number;
 };

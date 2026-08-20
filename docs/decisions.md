@@ -1275,3 +1275,57 @@ the 44px floor". There is no 44px floor: WCAG 2.2 SC 2.5.8 Target Size (Minimum)
 and 44×44 is SC 2.5.5, **AAA**. The pills already met AA. 32px is chosen because it is the most
 important click in the product and the density suits a three-pane tool — not to fix a violation that
 did not exist.
+
+---
+
+## D39 — The composer computes one state, and the stop button really stops
+
+**Decision.** `ChatInput` derives a single `status` from an ordered set of conditions, and both the
+control and the line beneath it read from it. `ready` and `busy` arrive as separate props,
+`useDictation` reports a `mode`, and `handedOver` is threaded through at last. The send button
+becomes a stop button while answering, and `useChatStream` exposes `stop()`.
+
+**Why one derived value.** The old composer read `disabled`, `dictation.state` and `dictation.error`
+independently in three places — the button styling, the textarea, and the footer sentence. Nothing
+stopped them disagreeing, and a control that says one thing while the line under it says another is
+worse than either alone. One value, first match wins, both read it.
+
+**Three inputs had to be repaired before any of that was expressible.**
+
+- `chat-panel.tsx` passed `disabled={!ready || busy}`, collapsing "no manual selected" and "the
+  assistant is answering" into one boolean. They are different states and now arrive separately.
+- `useDictation` reported a fallback to recording only by putting a sentence in `error`, so the
+  caller had to string-match an error message to know which path it was on. It now reports
+  `mode: "live" | "recording" | null`.
+- `handedOver` had been computed by `useChatStream` since Slice 16 and **consumed by nothing**, so
+  nothing on screen said who the user was now talking to. It now marks the composer and names the
+  recipient.
+
+**The stop button is a real capability, not a redraw.** The artboard showed send becoming stop while
+answering. `useChatStream` already held an `AbortController` and already finalised a part-written
+message in its `catch`/`finally`; it simply never exposed a trigger. Shipping a button labelled stop
+that did not stop would have been worse than shipping no button, so `stop()` is exported and wired.
+
+**What it does not do:** it stops this client reading the stream and finalises the message. The
+server-side pipeline is not cancelled. Saying so is better than implying the work halts.
+
+**Send is disabled for the whole of listening**, not merely while an interim guess is outstanding as
+first planned. Mid-dictation the instruction on screen is "press stop when you are done", and a send
+that fires before that contradicts it. Stricter than the plan, and deliberately.
+
+**The composer is NOT disabled during a handoff, and the first attempt at this was wrong.** State 9
+was implemented as a hard lock, which broke a shipped feature: D24 made the handoff a two-way
+conversation, and `api.py:186` stores the user's turn *before* the handover check precisely so the
+agent can read it. "The assistant writes nothing" and "the user cannot write" are different claims,
+and conflating them turned a conversation into a dead end. The handoff now shows as a green composer
+border and a line naming who the reply reaches; the input stays fully usable.
+
+**Starting dictation is a visible state, because it is slow.** D36's lazy import means the first
+mic click waits on a token fetch, a 7 MB download and a socket. Leaving that looking idle invited a
+second click, which opened a second recogniser on the same microphone and inserted every phrase
+twice. `start()` is now idempotent, the wait is shown, and a live start that fails closes its
+recogniser rather than leaving it connected beside the fallback recorder.
+
+**Elapsed time is client-measured.** `Message.elapsedMs` is stamped in the browser and marked as such
+in `types/chat.ts`, which otherwise mirrors the backend contract. A restored conversation has no
+timing, so the collapsed trace reads `5 steps` rather than inventing a duration.

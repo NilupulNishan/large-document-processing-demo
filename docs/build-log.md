@@ -2731,3 +2731,117 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [ ] The citation click acknowledges itself, but the PDF pane does not respond — the sweep needs
       `pdf-viewer.tsx` and is not built.
 - [ ] `chat-panel.tsx` moved onto tokens; its empty state is still the old grey-on-grey wording.
+
+---
+
+## Slice 29 — the composer, and three states the app could not express
+
+### Outcome
+
+The composer moves onto the design system and, more importantly, can now say which of nine states it
+is in. Two of those states had no representation in the code at all. Frontend only.
+
+### It was not a styling problem
+
+`chat-input.tsx` read `disabled`, `dictation.state` and `dictation.error` in three separate places —
+button, textarea, footer sentence — with nothing keeping them consistent. It now derives one `status`
+from an ordered list of conditions and both the control and the line beneath it read from it.
+
+Three inputs had to be fixed before most states were expressible:
+
+| gap | effect |
+|---|---|
+| `chat-panel.tsx` passed `disabled={!ready \|\| busy}` | "no manual" and "answering" were the same boolean |
+| `useDictation` signalled its fallback only through `error` text | the caller had to string-match a sentence |
+| `handedOver` computed since Slice 16, consumed by nothing | nothing said who the user was talking to |
+
+The last is the one worth dwelling on, and I got it wrong on the first attempt. `useChatStream` has
+returned `handedOver` for thirteen slices while `container.tsx` destructured `{ messages, send, busy }`,
+so nothing on screen said a person had taken over.
+
+**I fixed that by disabling the composer, which broke a working feature.** D24 made the handoff a
+*conversation*: `api.py:186` stores the user's turn before the handover check, with the comment "the
+message is stored for the agent to read". The user was always meant to keep talking. I had read "the
+assistant writes nothing" as "the user cannot write" — different claims, and conflating them turned a
+two-way handoff into a dead end.
+
+The handoff now shows as a green composer border and a line naming who the reply reaches. The input
+stays fully usable, which is what it was before I touched it.
+
+### The stop button had to be earned
+
+The artboard showed send becoming stop while answering. `useChatStream` already held an
+`AbortController` and already finalised a part-written message — it just never exposed a trigger, so
+`stop()` is now exported and wired.
+
+**It stops this client reading the stream. It does not cancel the server-side pipeline**, and the
+checkpoint says so rather than letting the button imply more than it does.
+
+### Motion that had been defined and never used
+
+`animate-breathe` was written in Slice A and applied to nothing until now. The interim dictation guess
+breathes in grey until the recogniser commits it; the record button carries the same `animate-live`
+ring the running trace node uses; and the streaming placeholder became a `step-end` caret rather than
+a fading block, which is what a caret actually does.
+
+### Dictating once produced the phrase twice
+
+Reported from the browser, and caused by this slice's own lazy import.
+
+`startLive()` awaits three slow things before anything on screen changes: the `/speech/token` fetch,
+the **7 MB SDK dynamic import** (D36 code-split it so the page does not carry it), and the WebSocket
+connect. About a second on first use. Throughout it `state` was still `"idle"`, so the mic button
+looked untouched and stayed enabled.
+
+Clicking it again — the natural response to a button that appears to have done nothing — started a
+**second recogniser on the same microphone**. Both fired `recognized` for one utterance and both
+called `onText`.
+
+Three fixes, because the same code had two more ways to reach the same symptom:
+
+- A `startingRef` guard makes `start()` idempotent while a start is in flight or a recogniser or
+  recorder already exists.
+- A `"starting"` state that is visible: spinner on the mic, "Opening the microphone" below it, the
+  button disabled. The window that invited the second click is now occupied.
+- **`startLive` now closes the recogniser if it throws.** Previously a failed start left it attached
+  and connected, so the fallback recorder ran *alongside* a live recogniser — the same duplication by
+  a second route, and far harder to notice.
+
+The slice made starting slow and then gave it no state. Both halves were mine.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| States the composer could express | 3 | **10**, including `starting` |
+| Dictating once | inserted the phrase **twice** | **once** |
+| "No manual" vs "answering" | one boolean | **separate props** |
+| Dictation fallback detection | string-match an error | **`mode` on the hook** |
+| `handedOver` consumers | none | **composer marked, and names who the reply reaches** |
+| Stop a running answer | not possible | **send becomes stop, and it stops** |
+| Collapsed trace | `5 steps` | **`5 steps · 3.2s`**, omitted when unknown |
+| `animate-breathe` uses | 0 | **1** |
+
+### Checkpoint
+
+- [x] Control and footer line are computed from one value and cannot disagree.
+- [x] A handed-over conversation says who the reply reaches, and **stays usable** — the first
+      attempt locked it and broke D24's two-way handoff.
+- [x] The stop button stops, and the log says what it does not do.
+- [x] Elapsed time is marked client-measured and omitted rather than invented on restore.
+- [ ] **Not walked in a browser.** Slices C and D are both unverified by eye; the auto-scroll
+      behaviour from C especially cannot be checked by a build.
+- [x] Dictation is idempotent: clicking the mic repeatedly during startup opens one recogniser.
+- [x] A failed live start tears its recogniser down instead of leaving it connected.
+- [ ] Send is disabled for the whole of listening, which is stricter than the plan's "while an
+      interim guess is outstanding". Deliberate, but it has not been used in anger.
+- [ ] The **PDF page sweep** on taking a citation is still not built — the most demo-visible thing
+      missing from the design.
+- [ ] The header's manual switcher is a native `<select>`, not the artboard's drawn control.

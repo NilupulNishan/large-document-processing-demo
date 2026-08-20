@@ -1,16 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, Square, SendHorizonal } from "lucide-react";
+import { Loader2, Mic, SendHorizonal, Square, UserRound } from "lucide-react";
 
 import { useDictation } from "@/hooks/use-dictation";
 
 type Props = {
   onSend: (message: string) => void;
-  disabled?: boolean;
+  onStop?: () => void;
+  /** A manual is chosen and a session exists. */
+  ready?: boolean;
+  /** The assistant is answering. Kept separate from `ready`: they are different states. */
+  busy?: boolean;
+  /** A person owns the conversation, so the pipeline writes nothing (D24). */
+  handedOver?: boolean;
 };
 
-export default function ChatInput({ onSend, disabled = false }: Props) {
+export default function ChatInput({
+  onSend,
+  onStop,
+  ready = false,
+  busy = false,
+  handedOver = false,
+}: Props) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -18,8 +30,35 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
     setValue((current) => (current ? `${current.trimEnd()} ${text}` : text));
   const dictation = useDictation(appendDictated);
 
-  const busy = disabled || dictation.state === "transcribing";
-  const canSend = value.trim().length > 0 && !busy;
+  const starting = dictation.state === "starting";
+  const listening = dictation.state === "listening";
+  const transcribing = dictation.state === "transcribing";
+  const typed = value.trim().length > 0;
+
+  // First match wins. The control and the line below it are read from this one value, so
+  // they cannot tell the user two different things.
+  const status = handedOver
+    ? { hint: "A specialist has this conversation. Your reply goes to them.", tone: "person" }
+    : !ready
+      ? { hint: "Choose a manual to begin", tone: "quiet" }
+      : busy
+        ? { hint: "Answering, press stop to end it", tone: "quiet" }
+        : starting
+          ? { hint: "Opening the microphone", tone: "quiet" }
+          : transcribing
+            ? { hint: "Writing it down", tone: "quiet" }
+            : listening && dictation.mode === "recording"
+              ? { hint: "Live transcription unavailable, recording instead", tone: "warn" }
+              : listening
+                ? { hint: "Listening, press stop when you are done", tone: "quiet" }
+                : dictation.error
+                  ? { hint: dictation.error, tone: "warn" }
+                  : { hint: "Enter to send, Shift + Enter for a new line", tone: "quiet" };
+
+  const locked = !ready || busy || transcribing;
+  const micBusy = starting || transcribing;
+  // A guess still being revised is not a sentence anyone meant to send.
+  const canSend = typed && !locked && !listening && !starting && !dictation.interim;
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -35,94 +74,114 @@ export default function ChatInput({ onSend, disabled = false }: Props) {
 
   const handleSend = () => {
     const message = value.trim();
-    if (!message || disabled) return;
+    if (!message || locked) return;
 
     onSend(message);
     setValue("");
 
     requestAnimationFrame(() => {
       if (textareaRef.current) {
-        textareaRef.current.style.height = "44px";
+        textareaRef.current.style.height = "36px";
       }
     });
   };
 
   return (
-    <div className="border-t border-slate-200 bg-white px-4 py-4">
-      <div className="mx-auto w-full">
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm transition-all focus-within:border-blue-300 focus-within:shadow-md">
-          <div className="flex items-end gap-3 px-3 py-3">
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="Ask a question, or describe the fault…"
-              rows={1}
-              disabled={busy}
-              className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-            />
+    <div className="border-t border-divider px-6 pb-5 pt-4">
+      <div
+        className={`rounded-lg border bg-surface transition-colors focus-within:border-action ${
+          listening ? "border-action" : handedOver ? "border-person-line" : "border-line"
+        }`}
+      >
+        <div className="flex items-end gap-2.5 p-2.5 pl-3.5">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Ask a question, or describe the fault"
+            rows={1}
+            disabled={locked}
+            className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-2 text-body leading-5 text-ink outline-none placeholder:text-ink-3 disabled:text-ink-3"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
 
+          <button
+            type="button"
+            onClick={listening ? dictation.stop : dictation.start}
+            disabled={!ready || busy || micBusy}
+            className={`relative grid h-9 w-9 shrink-0 place-items-center rounded transition-colors active:scale-95 ${
+              listening
+                ? "bg-danger text-white"
+                : "border border-line text-ink-2 hover:bg-raised disabled:text-ink-4"
+            }`}
+            aria-label={listening ? "Stop recording" : "Dictate a question"}
+          >
+            {listening && (
+              <span
+                aria-hidden
+                className="animate-live absolute inset-0 rounded border-2 border-danger"
+              />
+            )}
+            {micBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : listening ? (
+              <Square className="h-3.5 w-3.5" fill="currentColor" />
+            ) : (
+              <Mic className="h-4 w-4" strokeWidth={1.7} />
+            )}
+          </button>
+
+          {/* While answering, the same slot stops the answer. Saying "stop" and not stopping
+              would be worse than not offering it. */}
+          {busy ? (
             <button
               type="button"
-              onClick={dictation.state === "listening" ? dictation.stop : dictation.start}
-              disabled={disabled || dictation.state === "transcribing"}
-              className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 active:scale-95 ${
-                dictation.state === "listening"
-                  ? "bg-red-600 text-white shadow-sm hover:bg-red-700"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-              }`}
-              aria-label={dictation.state === "listening" ? "Stop recording" : "Dictate a question"}
+              onClick={onStop}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded border border-line text-ink-2 transition-colors hover:bg-raised active:scale-95"
+              aria-label="Stop answering"
             >
-              {dictation.state === "transcribing" ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : dictation.state === "listening" ? (
-                <Square size={16} />
-              ) : (
-                <Mic size={18} />
-              )}
+              <Square className="h-3.5 w-3.5" fill="currentColor" />
             </button>
-
+          ) : (
             <button
               type="button"
               onClick={handleSend}
               disabled={!canSend}
-              className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 active:scale-95 ${
-                canSend
-                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-                  : "cursor-not-allowed bg-slate-100 text-slate-400"
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded transition-colors active:scale-95 ${
+                canSend ? "bg-action text-white hover:bg-action-hover" : "bg-divider text-ink-4"
               }`}
               aria-label="Send message"
             >
-              <SendHorizonal size={18} />
+              <SendHorizonal className="h-4 w-4" strokeWidth={1.8} />
             </button>
-          </div>
-
-          {dictation.interim && (
-            <p className="px-5 pb-2 text-[15px] leading-6 text-slate-400 italic">
-              {dictation.interim}
-            </p>
           )}
-
-          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
-            <span>
-              {dictation.error
-                ? dictation.error
-                : dictation.state === "listening"
-                  ? "Listening — press stop when you are done"
-                  : dictation.state === "transcribing"
-                    ? "Writing it down…"
-                    : "Press Enter to send"}
-            </span>
-            <span>Shift + Enter for new line</span>
-          </div>
         </div>
+
+        {/* The guess is visibly unsettled until the recogniser commits it. */}
+        {dictation.interim && (
+          <p className="animate-breathe px-3.5 pb-2.5 text-body leading-5 text-ink-2">
+            {dictation.interim}
+          </p>
+        )}
       </div>
+
+      <p
+        className={`mt-2 flex items-center gap-1.5 px-0.5 text-small ${
+          status.tone === "warn"
+            ? "text-general"
+            : status.tone === "person"
+              ? "text-person"
+              : "text-ink-3"
+        }`}
+      >
+        {status.tone === "person" && <UserRound className="h-3.5 w-3.5" strokeWidth={1.8} />}
+        {status.hint}
+      </p>
     </div>
   );
 }
