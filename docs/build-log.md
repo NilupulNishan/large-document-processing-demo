@@ -3150,4 +3150,18 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
       has a case worth seeing: a brand-new session before its first question.
 - [ ] A test message I wrote is still in the database — `3ede7bdca8b1`, an agent turn reading
       "allowed while open". It will appear in a demo transcript.
+
+### And the document pane learned to recover
+
+Reported from the browser as `UnknownErrorException: Failed to fetch` on `<Document>`. **Not a UI
+bug:** the endpoint serves the 42 MB BJ30 file in 0.2 s, verified twice. The dropped connection lines
+up with the backend restarting for this session's two `api.py` edits, and a fetch in flight when the
+server goes down produces exactly that.
+
+Worth fixing anyway, because the pane had **no recovery**: a failed load rendered a static line and
+stayed dead until the whole page was reloaded. It now names the likely cause and offers **Try again**,
+remounting the document with a `key` bump. Losing 45% of the screen with no way back is a bad failure
+mode in front of a client.
+
+Also checked and discarded: `--reload` killing large transfers. The server is running without it.
 - [ ] The wading misroute and the Quality tab remain the two open items with real weight.
