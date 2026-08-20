@@ -132,6 +132,11 @@ def reply(escalation_id: str, body: AgentReply) -> dict:
     found = db.get_escalation(escalation_id)
     if found is None:
         raise HTTPException(404, "No such escalation")
+    # Closing hands the conversation back to the pipeline, so a reply after that would
+    # arrive as a person speaking into a conversation no person is in. Enforced here, not
+    # only in the screen: the rule belongs with the data.
+    if found["status"] == "closed":
+        raise HTTPException(409, "This handoff is closed. Reopen it before replying.")
     if not body.text.strip():
         raise HTTPException(422, "An empty reply is not a reply")
     return db.add_message(found["session_id"], "agent", body.text.strip())

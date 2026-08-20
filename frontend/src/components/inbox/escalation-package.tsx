@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, NotebookPen, Send, TriangleAlert } from "lucide-react";
+import {
+  CircleCheck,
+  FileText,
+  NotebookPen,
+  Send,
+  TriangleAlert,
+} from "lucide-react";
 import MessageItem from "@/components/chat/message-item";
 import {
   replyToEscalation,
@@ -30,17 +36,27 @@ function asMessage(stored: StoredMessage): Message {
     citations: stored.citations ?? [],
     steps: [],
     escalation: stored.escalation_id
-      ? { id: stored.escalation_id, reason: stored.escalation_reason ?? "", pages: [] }
+      ? {
+          id: stored.escalation_id,
+          reason: stored.escalation_reason ?? "",
+          pages: [],
+        }
       : undefined,
   };
 }
 
-export default function EscalationPackageView({ pkg, loading, onStatusChange }: Props) {
+export default function EscalationPackageView({
+  pkg,
+  loading,
+  onStatusChange,
+}: Props) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   // Shown at once so the button is not dead while the request is in flight; the server
   // value replaces it on the next load.
-  const [movedTo, setMovedTo] = useState<EscalationPackage["status"] | null>(null);
+  const [movedTo, setMovedTo] = useState<EscalationPackage["status"] | null>(
+    null,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Polled while the handoff is open, so the customer's replies arrive without a refresh.
@@ -48,7 +64,8 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
     pkg?.session_id ?? null,
     Boolean(pkg) && pkg?.status !== "closed",
   );
-  const transcript = polled.messages.length > 0 ? polled.messages : (pkg?.transcript ?? []);
+  const transcript =
+    polled.messages.length > 0 ? polled.messages : (pkg?.transcript ?? []);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -66,6 +83,10 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
     setMovedTo(null);
   }
 
+  // Closing hands the conversation back to the pipeline, so replying after it would be a
+  // person speaking into a conversation no person is in. The server refuses it too (409).
+  const closed = (movedTo ?? pkg?.status) === "closed";
+
   async function move(status: EscalationPackage["status"]) {
     if (!pkg) return;
     setMovedTo(status);
@@ -80,7 +101,7 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!pkg || !text || sending) return;
+    if (!pkg || !text || sending || closed) return;
     setSending(true);
     try {
       await replyToEscalation(pkg.id, text);
@@ -105,7 +126,9 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-divider px-6 py-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-body font-semibold text-ink">{pkg.id}</span>
+          <span className="font-mono text-body font-semibold text-ink">
+            {pkg.id}
+          </span>
           <span className="rounded border border-divider bg-raised px-2 py-0.5 text-small font-semibold text-ink-2">
             {(movedTo ?? pkg.status).replace("_", " ")}
           </span>
@@ -114,12 +137,12 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
           </span>
 
           <span className="ml-auto flex items-center gap-2">
-            {(movedTo ?? pkg.status) === "open" && (
+            {(movedTo ?? pkg.status) !== "picked_up" && (
               <button
                 onClick={() => move("picked_up")}
                 className="h-8 rounded bg-person px-3 text-body font-semibold text-white transition-colors hover:brightness-110"
               >
-                Pick up
+                {closed ? "Reopen" : "Pick up"}
               </button>
             )}
             {(movedTo ?? pkg.status) !== "closed" && (
@@ -171,7 +194,9 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
             <p className="text-body leading-5 text-ink">{pkg.summary}</p>
             {pkg.next_step && (
               <p className="mt-3 border-t border-divider pt-3 text-body leading-5 text-ink-2">
-                <span className="font-semibold text-ink">Suggested first step: </span>
+                <span className="font-semibold text-ink">
+                  Suggested first step:{" "}
+                </span>
                 {pkg.next_step}
               </p>
             )}
@@ -183,30 +208,45 @@ export default function EscalationPackageView({ pkg, loading, onStatusChange }: 
         </p>
         <div className="space-y-5">
           {transcript.map((stored) => (
-            <MessageItem key={stored.id} message={asMessage(stored)} viewer="agent" />
+            <MessageItem
+              key={stored.id}
+              message={asMessage(stored)}
+              viewer="agent"
+            />
           ))}
         </div>
       </div>
 
-      <form
-        onSubmit={submit}
-        className="flex items-center gap-2 border-t border-divider px-6 py-3"
-      >
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Reply to the customer…"
-          className="h-9 min-w-0 flex-1 rounded border border-line px-3 text-body text-ink outline-none transition-colors focus:border-person"
-        />
-        <button
-          type="submit"
-          disabled={sending || !draft.trim()}
-          className="flex h-9 items-center gap-1.5 rounded bg-person px-3.5 text-body font-semibold text-white transition-colors hover:brightness-110 disabled:bg-divider disabled:text-ink-4"
+      {closed ? (
+        <p className="flex items-center gap-2 border-t border-divider px-6 py-4 text-body text-ink-2">
+          <CircleCheck
+            className="h-4 w-4 shrink-0 text-ink-3"
+            strokeWidth={1.7}
+          />
+          This handoff is closed. The assistant has the conversation again —
+          pick it up to reply.
+        </p>
+      ) : (
+        <form
+          onSubmit={submit}
+          className="flex items-center gap-2 border-t border-divider px-6 py-3"
         >
-          <Send className="h-3.5 w-3.5" />
-          Send
-        </button>
-      </form>
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Reply to the customer…"
+            className="h-9 min-w-0 flex-1 rounded border border-line px-3 text-body text-ink outline-none transition-colors focus:border-person"
+          />
+          <button
+            type="submit"
+            disabled={sending || !draft.trim()}
+            className="flex h-9 items-center gap-1.5 rounded bg-person px-3.5 text-body font-semibold text-white transition-colors hover:brightness-110 disabled:bg-divider disabled:text-ink-4"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Send
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -3011,6 +3011,8 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [x] Walked in a browser. The scroll fix, the citation ring and the inbox all behave; the handoff
       lifecycle bug above was found this way and nothing else would have caught it.
 - [x] Closing a handoff returns the conversation to the pipeline **and says so on both screens**.
+- [x] A closed handoff refuses agent replies — **409 from the endpoint**, not only a disabled form.
+      Otherwise a person could speak into a conversation no person is in. Reopen is the way back.
 - [ ] The artboards now disagree with the code in three places: the Components sheet draws 44px
       citation pills against 32px shipped, States draws nine composer states against ten, and Main
       draws an account avatar that was deliberately not built.
