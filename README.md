@@ -180,8 +180,14 @@ the code.
 
 Three known gaps, all measured and recorded rather than hidden:
 
-- `x55-08` retrieves nothing that explains hill descent control: the chunk that does say only "HDC"
-  and carries a meaningless heading. D4's context sentence is the fix, and is not built.
+- D4's LLM-written context sentence is not built, and the row that justified it no longer
+  demonstrates the problem. The X55 chunk explaining hill descent control never writes the words
+  "hill descent" — only "HDC" — under the heading `Automatic release > HDC`, most of which is about
+  the parking brake. That was expected to make it unfindable. Measured, it is not: fusion ranks it
+  first, reranking third, and `x55-08` routes `manual` with correct citations. Dense retrieval
+  bridges the acronym on its own. The chunk is still poorly labelled, so the concern is real for
+  chunks nobody has queried — but it is no longer evidenced by this row, and D4 should be re-argued
+  on measurement rather than on this example.
 - Model calls are not deterministic even at temperature 0, and this deployment ignores the API's
   `seed` parameter, so a question sitting near a band routes differently between runs. Five rows are
   known to move. Three runs of identical code gave 99%, 95% and 95% — read every routing number as a

@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Open Sans", Helvetica, Arial, sans-serif;
+           color: #15191e; background: #ffffff; -webkit-font-smoothing: antialiased; }
+    a { color: #2563eb; } a:hover { color: #1d4ed8; }
+    * { box-sizing: border-box; }
+    .lbl { font-size: 12px; line-height: 16px; font-weight: 700; color: #5a6572;
+           letter-spacing: .04em; text-transform: uppercase; }
+    .note { font-size: 12px; line-height: 17px; color: #8b949e; }
+    .sw { width: 100%; height: 44px; border-radius: 4px; }
+    /* Interim dictation fades and sharpens rather than popping — audit item 10. */
+    .interim { animation: interim 2.6s ease-in-out infinite; }
+    @keyframes interim { 0%, 100% { opacity: .35; filter: blur(.3px); } 50% { opacity: 1; filter: none; } }
+    .mic { animation: mic 1.5s ease-out infinite; }
+    @keyframes mic { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(1.7); opacity: 0; } }
+  </style>
+</helmet>
+
+<div style="width: 1000px; background: #ffffff; padding: 36px 40px 44px; display: flex; flex-direction: column; gap: 34px;">
+
+  <div>
+    <p style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">Manual Assist, design system</p>
+    <p style="margin: 4px 0 0;" class="note">Open Sans on the Cloudscape type scale. Four semantic hues, each with exactly one meaning.</p>
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 14px;">Type</p>
+    <div style="display: flex; flex-direction: column; gap: 11px;">
+      <div style="display: flex; align-items: baseline; gap: 18px;"><span style="width: 132px;" class="note">Display 42/48</span><span style="font-size: 42px; line-height: 48px; font-weight: 700; letter-spacing: -.02em;">Answers with the page</span></div>
+      <div style="display: flex; align-items: baseline; gap: 18px;"><span style="width: 132px;" class="note">Heading xl 24/30</span><span style="font-size: 24px; line-height: 30px; font-weight: 700;">Hill descent control</span></div>
+      <div style="display: flex; align-items: baseline; gap: 18px;"><span style="width: 132px;" class="note">Heading md 18/22</span><span style="font-size: 18px; line-height: 22px; font-weight: 700;">BAIC BJ30 / E30</span></div>
+      <div style="display: flex; align-items: baseline; gap: 18px;"><span style="width: 132px;" class="note">Body 14/20</span><span style="font-size: 14px; line-height: 20px;">Tighten the wheel nuts to 110-130 N·m in a diagonal sequence.</span></div>
+      <div style="display: flex; align-items: baseline; gap: 18px;"><span style="width: 132px;" class="note">Small 12/16</span><span style="font-size: 12px; line-height: 16px; color: #5a6572;">Page 127 of 283</span></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 6px;">Colour, one meaning each</p>
+    <p class="note" style="margin: 0 0 14px;">Blue never means status. Green never means success, only that a person is involved.</p>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+      <div><div class="sw" style="background: {{accent}};"></div><p style="margin: 7px 0 2px; font-size: 14px; line-height: 20px; font-weight: 600;">Blue</p><p class="note" style="margin: 0;">Primary action, and the user's own voice</p></div>
+      <div><div class="sw" style="background: #4f46e5;"></div><p style="margin: 7px 0 2px; font-size: 14px; line-height: 20px; font-weight: 600;">Indigo</p><p class="note" style="margin: 0;">From the manual</p></div>
+      <div><div class="sw" style="background: #9a6700;"></div><p style="margin: 7px 0 2px; font-size: 14px; line-height: 20px; font-weight: 600;">Amber</p><p class="note" style="margin: 0;">Not from the manual</p></div>
+      <div><div class="sw" style="background: #077d55;"></div><p style="margin: 7px 0 2px; font-size: 14px; line-height: 20px; font-weight: 600;">Green</p><p class="note" style="margin: 0;">A person is involved</p></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 6px;">Provenance, carried by shape as well as colour</p>
+    <p class="note" style="margin: 0 0 14px;">A page citation and a web citation must never be confusable at a glance. Solid border versus dashed does that even in greyscale.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px solid #c7d2fe; border-radius: 4px; background: #eef2ff; font-family: inherit; font-size: 14px; font-weight: 600; color: #4338ca; cursor: pointer;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h7l3 3v11H5V3Z"></path><path d="M12 3v3h3"></path></svg>
+        Page 127
+      </button>
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px dashed #d8b365; border-radius: 4px; background: #fdf6e3; font-family: inherit; font-size: 14px; font-weight: 600; color: #9a6700; cursor: pointer;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4h5v5"></path><path d="M16 4l-7 7"></path><path d="M14 12v4H4V6h4"></path></svg>
+        baic-global.com
+      </button>
+      <span style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px solid #a7d8c4; border-radius: 4px; background: #e9f7f1; font-size: 14px; font-weight: 600; color: #077d55;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>
+        Passed to a specialist
+      </span>
+    </div>
+    <p class="note" style="margin: 12px 0 0;">All three are 44px tall. The current build ships these at 24px, well under a usable target.</p>
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 14px;">Controls</p>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+      <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 4px; background: {{accent}}; color: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;">Primary</button>
+      <button style="height: 36px; padding: 0 16px; border: 1px solid #d4d9de; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #15191e; cursor: pointer;">Secondary</button>
+      <button style="height: 36px; padding: 0 16px; border: 1px solid #d4d9de; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #8b949e; cursor: not-allowed;">Disabled</button>
+      <button style="height: 36px; padding: 0 16px; border: 1px solid #d4d9de; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #15191e; outline: 2px solid {{accent}}; outline-offset: 2px;">Focus visible</button>
+      <button style="height: 36px; padding: 0 16px; border: 1px solid #e3b7b7; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #b42318; cursor: pointer;">Delete</button>
+    </div>
+    <p class="note" style="margin: 12px 0 0;">Focus is currently invisible everywhere in the build. Every interactive element gets this ring.</p>
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 14px;">Composer</p>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+
+      <div style="border: 1px solid #d4d9de; border-radius: 8px; padding: 10px 10px 10px 14px; display: flex; align-items: center; gap: 10px;">
+        <span style="flex: 1; font-size: 14px; line-height: 20px; color: #8b949e;">Ask a question, or describe the fault</span>
+        <div style="width: 36px; height: 36px; border: 1px solid #d4d9de; border-radius: 4px; display: grid; place-items: center;">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg>
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 4px; background: #eceff1;"></div>
+      </div>
+
+      <div style="border: 1px solid {{accent}}; border-radius: 8px; padding: 10px 10px 10px 14px; display: flex; align-items: flex-start; gap: 10px; box-shadow: 0 0 0 3px rgba(37,99,235,.12);">
+        <div style="flex: 1; padding: 3px 0;">
+          <span style="font-size: 14px; line-height: 20px; color: #15191e;">What torque do I tighten </span><span class="interim" style="font-size: 14px; line-height: 20px; color: #5a6572;">the wheel nuts to</span>
+        </div>
+        <div style="position: relative; width: 36px; height: 36px; flex-shrink: 0;">
+          <div class="mic" style="position: absolute; inset: 0; border-radius: 4px; border: 2px solid #b42318;"></div>
+          <div style="position: absolute; inset: 0; border-radius: 4px; background: #b42318; display: grid; place-items: center;">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="#ffffff"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg>
+          </div>
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 4px; background: #eceff1; flex-shrink: 0;"></div>
+      </div>
+      <p class="note" style="margin: 0 0 0 2px;">Listening. Words not yet finalised stay grey until the recogniser commits them, so the box never rewrites itself mid-word.</p>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#2563eb","options":["#2563eb","#0b7285","#4f46e5","#15191e"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2563eb' };
+  }
+}
+</script>
+</body>
+</html>

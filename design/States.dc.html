@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Open Sans", Helvetica, Arial, sans-serif;
+           color: #15191e; background: #ffffff; -webkit-font-smoothing: antialiased; }
+    a { color: #2563eb; } a:hover { color: #1d4ed8; }
+    * { box-sizing: border-box; }
+    .lbl { font-size: 12px; line-height: 16px; font-weight: 700; color: #5a6572;
+           letter-spacing: .04em; text-transform: uppercase; }
+    .note { font-size: 12px; line-height: 17px; color: #8b949e; }
+    .box { border: 1px solid #d4d9de; border-radius: 8px; background: #ffffff;
+           padding: 9px 9px 9px 13px; display: flex; align-items: center; gap: 9px; }
+    .ico { width: 36px; height: 36px; flex-shrink: 0; border-radius: 4px; display: grid; place-items: center; }
+    .txt { flex: 1; font-size: 14px; line-height: 20px; }
+    .foot { margin: 7px 0 0 2px; font-size: 12px; line-height: 16px; color: #8b949e; }
+    .st { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .stn { font-size: 14px; line-height: 20px; font-weight: 600; padding-top: 10px; }
+
+    @keyframes enter   { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes pop     { from { transform: scale(0); } }
+    @keyframes live    { 0% { transform: scale(.6); opacity: .85; } 100% { transform: scale(1.9); opacity: 0; } }
+    @keyframes blink   { 50% { opacity: 0; } }
+    @keyframes breathe { 0%, 100% { opacity: .35; filter: blur(.3px); } 50% { opacity: 1; filter: none; } }
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes cite    { 0%, 100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); } 22% { box-shadow: 0 0 0 5px rgba(79,70,229,.22); } }
+    @keyframes sweep   { 0% { transform: translateY(-100%); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(320%); opacity: 0; } }
+
+    .a-enter   { animation: enter 2.4s cubic-bezier(.16,1,.3,1) infinite; }
+    .a-pop     { animation: pop 2.4s cubic-bezier(.34,1.56,.64,1) infinite; }
+    .a-live    { animation: live 1.4s ease-out infinite; }
+    .a-blink   { animation: blink 1s step-end infinite; }
+    .a-breathe { animation: breathe 2.6s ease-in-out infinite; }
+    .a-spin    { animation: spin .9s linear infinite; }
+    .a-cite    { animation: cite 2.2s ease-out infinite; }
+    .a-sweep   { animation: sweep 2.4s ease-in-out infinite; }
+  </style>
+</helmet>
+
+<div style="width: 1040px; background: #ffffff; padding: 36px 40px 46px; display: flex; flex-direction: column; gap: 34px;">
+
+  <div>
+    <p style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">Composer states, and every animation</p>
+    <p style="margin: 4px 0 0;" class="note">Nine states the input can be in. The control and the line beneath it always agree about what is happening.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 20px;">
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">1 · No manual yet</p>
+      <div>
+        <div class="box" style="background: #fafbfc;">
+          <span class="txt" style="color: #c2c8cf;">Ask a question, or describe the fault</span>
+          <div class="ico" style="border: 1px solid #e6e9ec; background: #fafbfc;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Choose a manual to begin</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">2 · Empty, ready</p>
+      <div>
+        <div class="box">
+          <span class="txt" style="color: #8b949e;">Ask a question, or describe the fault</span>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Enter to send, Shift + Enter for a new line</p>
+        <p class="note" style="margin: 4px 0 0 2px;">Send stays grey until there is something to send. The mic does not, because it is how you produce that something.</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">3 · Typed</p>
+      <div>
+        <div class="box" style="border-color: {{accent}}; box-shadow: 0 0 0 3px rgba(37,99,235,.1);">
+          <span class="txt">What torque do I tighten the wheel nuts to?</span>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="background: {{accent}};"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Enter to send, Shift + Enter for a new line</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">4 · Listening</p>
+      <div>
+        <div class="box" style="border-color: {{accent}}; box-shadow: 0 0 0 3px rgba(37,99,235,.1);">
+          <span class="txt">What torque do I tighten <span class="a-breathe" style="color: #5a6572;">the wheel nuts to</span></span>
+          <div style="position: relative; width: 36px; height: 36px; flex-shrink: 0;">
+            <div class="a-live" style="position: absolute; inset: 0; border-radius: 4px; border: 2px solid #b42318;"></div>
+            <div class="ico" style="position: absolute; inset: 0; background: #b42318;"><svg width="14" height="14" viewBox="0 0 20 20" fill="#ffffff"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg></div>
+          </div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Listening, press stop when you are done</p>
+        <p class="note" style="margin: 4px 0 0 2px;">Grey words are the recogniser's current guess and are still being revised. Black words are committed. Send is disabled while a guess is outstanding, so a half-formed sentence cannot be sent by reflex.</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">5 · Transcribing</p>
+      <div>
+        <div class="box">
+          <span class="txt" style="color: #8b949e;">What torque do I tighten the wheel nuts to</span>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg class="a-spin" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="2" stroke-linecap="round"><path d="M10 2.5a7.5 7.5 0 1 1-7.5 7.5" ></path></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Writing it down</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">6 · Answering</p>
+      <div>
+        <div class="box" style="background: #fafbfc;">
+          <span class="txt" style="color: #c2c8cf;">Ask a question, or describe the fault</span>
+          <div class="ico" style="border: 1px solid #e6e9ec; background: #fafbfc;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg width="14" height="14" viewBox="0 0 20 20" fill="#5a6572"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg></div>
+        </div>
+        <p class="foot">Answering, the send button becomes stop</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">7 · Fell back</p>
+      <div>
+        <div class="box" style="border-color: #d8b365;">
+          <span class="txt" style="color: #8b949e;">Recording</span>
+          <div class="ico" style="background: #b42318;"><svg width="14" height="14" viewBox="0 0 20 20" fill="#ffffff"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot" style="color: #9a6700;">Live transcription unavailable, recording instead</p>
+        <p class="note" style="margin: 4px 0 0 2px;">A network that blocks the streaming socket still gets a working microphone, and is told which mode it is in.</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">8 · Heard nothing</p>
+      <div>
+        <div class="box">
+          <span class="txt" style="color: #8b949e;">Ask a question, or describe the fault</span>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot" style="color: #9a6700;">Nothing was heard. Try again, closer to the microphone</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">9 · A person has it</p>
+      <div>
+        <div class="box" style="border-color: #a7d8c4; background: #f6fbf9;">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#077d55" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>
+          <span class="txt" style="color: #15191e;">A specialist has this conversation. Replies come from them.</span>
+        </div>
+        <p class="foot">The assistant writes nothing while a handoff is open</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div>
+    <p class="lbl" style="margin: 0 0 6px;">Motion</p>
+    <p class="note" style="margin: 0 0 16px;">Every animation in the product, running. One easing for entrances, one for anything that should feel physical.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><div class="a-enter" style="width: 92px; height: 26px; border-radius: 6px; background: {{accent}};"></div></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Message enter</p><p class="note" style="margin: 2px 0 0;">240ms · (.16,1,.3,1) · y+8</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><svg class="a-pop" width="26" height="26" viewBox="0 0 20 20" style="transform-origin: 10px 10px;"><circle cx="10" cy="10" r="9" fill="none" stroke="#077d55" stroke-width="1.5"></circle><path d="M5.5 10.2l2.4 2.4L13 7" fill="none" stroke="#077d55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Step complete</p><p class="note" style="margin: 2px 0 0;">300ms · (.34,1.56,.64,1)</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><div style="position: relative; width: 18px; height: 18px;"><div class="a-live" style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid #2563eb;"></div><div style="position: absolute; inset: 5px; border-radius: 50%; background: {{accent}};"></div></div></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Step running</p><p class="note" style="margin: 2px 0 0;">1.4s · ease-out · loop</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><span style="font-size: 14px;">answer<span class="a-blink" style="display: inline-block; width: 2px; height: 15px; background: #2563eb; vertical-align: -2px; margin-left: 1px;"></span></span></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Streaming caret</p><p class="note" style="margin: 2px 0 0;">1s · step-end · loop</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><span class="a-breathe" style="font-size: 14px; color: #5a6572;">the wheel nuts to</span></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Interim speech</p><p class="note" style="margin: 2px 0 0;">2.6s · ease-in-out · loop</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><span class="a-cite" style="display: inline-flex; align-items: center; height: 30px; padding: 0 11px; border: 1px solid #c7d2fe; border-radius: 4px; background: #eef2ff; font-size: 12px; font-weight: 600; color: #4338ca;">Page 127</span></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Citation taken</p><p class="note" style="margin: 2px 0 0;">400ms · ease-out</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; width: 100%; display: grid; place-items: center;"><div style="position: relative; width: 74px; height: 38px; border: 1px solid #d4d9de; border-radius: 2px; overflow: hidden; background: #ffffff;"><div class="a-sweep" style="position: absolute; left: 0; right: 0; height: 11px; background: rgba(79,70,229,.24);"></div></div></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Page located</p><p class="note" style="margin: 2px 0 0;">600ms · ease-in-out</p></div>
+      </div>
+
+      <div style="border: 1px solid #e6e9ec; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="height: 40px; display: grid; place-items: center;"><svg class="a-spin" width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="2" stroke-linecap="round"><path d="M10 2.5a7.5 7.5 0 1 1-7.5 7.5"></path></svg></div>
+        <div style="text-align: center;"><p style="margin: 0; font-size: 14px; font-weight: 600;">Working</p><p class="note" style="margin: 2px 0 0;">900ms · linear · loop</p></div>
+      </div>
+
+    </div>
+    <p class="note" style="margin: 14px 0 0;">Hover and focus transitions are 120ms ease. Nothing in the product animates for longer than the work it represents, and nothing animates that did not happen.</p>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#2563eb","options":["#2563eb","#0b7285","#4f46e5","#15191e"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2563eb' };
+  }
+}
+</script>
+</body>
+</html>

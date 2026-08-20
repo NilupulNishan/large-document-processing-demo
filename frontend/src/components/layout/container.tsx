@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
+import AppHeader from "./app-header";
 import Sidebar from "./sidebar";
 import ChatPanel from "@/components/chat/chat-panel";
 import PdfViewer from "@/components/pdf/pdf-viewer";
@@ -9,6 +10,7 @@ import { useChatStream } from "@/hooks/use-chat-stream";
 import {
   createSession,
   deleteSession,
+  listEscalations,
   listManuals,
   listSessions,
   pdfUrl,
@@ -21,11 +23,17 @@ export default function AppShell() {
   const [manualId, setManualId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [openHandoffs, setOpenHandoffs] = useState(0);
 
   const { messages, send, busy } = useChatStream(sessionId);
 
   const refreshSessions = useCallback(() => {
     listSessions().then(setSessions).catch(() => setSessions([]));
+    // The badge counts real open handoffs. An invented number here would be the one
+    // kind of fake this product cannot afford.
+    listEscalations()
+      .then((found) => setOpenHandoffs(found.filter((item) => item.status === "open").length))
+      .catch(() => setOpenHandoffs(0));
   }, []);
 
   // The opening session is created here rather than reactively: send() would
@@ -110,8 +118,15 @@ export default function AppShell() {
   );
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-slate-100">
-      <div className="flex h-full gap-4 overflow-hidden bg-white p-4">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-ground">
+      <AppHeader
+        manuals={manuals}
+        selectedManual={manualId}
+        onSelectManual={selectManual}
+        openHandoffs={openHandoffs}
+      />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden bg-surface">
         <Sidebar
           manuals={manuals}
           sessions={history}
@@ -126,7 +141,7 @@ export default function AppShell() {
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <Group orientation="horizontal" className="h-full min-h-0 min-w-0">
             <Panel defaultSize="55%" minSize="30%">
-              <div className="h-full min-h-0 min-w-0 overflow-hidden pr-2">
+              <div className="h-full min-h-0 min-w-0 overflow-hidden">
                 <ChatPanel
                   manualTitle={manual?.title}
                   messages={messages}
@@ -138,12 +153,12 @@ export default function AppShell() {
               </div>
             </Panel>
 
-            <Separator className="group relative mx-1 flex w-2 items-center justify-center">
-              <div className="h-full w-1 rounded-full bg-slate-200 transition-colors group-hover:bg-blue-400" />
+            <Separator className="group relative flex w-1.5 items-center justify-center bg-divider">
+              <div className="h-full w-full bg-transparent transition-colors group-hover:bg-action" />
             </Separator>
 
             <Panel defaultSize="45%" minSize="30%">
-              <div className="h-full min-h-0 min-w-0 overflow-hidden pl-2">
+              <div className="h-full min-h-0 min-w-0 overflow-hidden">
                 <PdfViewer
                   // Remount on a new document rather than resetting page state
                   // in an effect.

@@ -2570,3 +2570,78 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [ ] The first mic click pauses while 378 KB downloads. Prefetching on idle would hide it.
 - [ ] `canceled` surfaces Azure's raw `errorDetails` — useful now, probably too raw for a demo.
 - [ ] The fallback path has not been exercised against a network that actually blocks WebSockets.
+
+---
+
+## Slice 27 — the design system lands: type, tokens and a global header
+
+### Outcome
+
+Open Sans on Cloudscape's scale, semantic tokens in `@theme`, and a global header that renames itself
+on the operator route. Frontend only; no pipeline, no eval.
+
+### Arial was hiding a hierarchy that did not exist
+
+`globals.css` was twelve lines and set `font-family: Arial, Helvetica, sans-serif`. The sidebar asked
+for five weights — `font-black`, `font-extrabold`, `font-bold`, `font-semibold`, `font-normal` — and
+**Arial ships none of the first two**, so three of those rendered identically. The intended hierarchy
+was never on screen. Switching the family fixed a layout defect, not just the look.
+
+### Tokens, because polish was O(every component)
+
+Sizes were literals scattered across files: `text-[15px]`, `text-[13px]`, `text-[11px]`, `text-[10px]`
+and five Tailwind steps, with no config to change them from. Tailwind v4 has no `tailwind.config` here,
+so the scale and palette are an `@theme` block in `globals.css` (D37).
+
+Two things arrived free with that block: a single `:focus-visible` rule, where keyboard traversal had
+previously been invisible across every control, and a `prefers-reduced-motion` block that disables the
+motion this design introduces. The motion is decoration over information rather than the information
+itself, so removing it costs nothing.
+
+### The header is structural
+
+`sidebar.tsx` is `hidden … lg:flex`, and it held the only `h1`. Below 1024px the app had no heading
+and no navigation whatsoever. The header carries both, survives that width, and takes a variant:
+`/inbox` renders "Agent portal" with a Staff chip and a green top rule.
+
+The badge counts **real open escalations** via `listEscalations`, filtered to `status === "open"`.
+A decorative number would be the one kind of fake this product cannot afford.
+
+### Two deletions worth naming
+
+The sidebar lost its wordmark and its inbox link, and the operator aside lost "Back to chat" — all
+three now live in the header, and keeping either would have meant two controls for one action.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+The eval harness was not run: nothing here touches ingestion, retrieval, reranking or the gate.
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Typeface | Arial (no black or extra-bold) | **Open Sans, self-hosted** |
+| Weights actually rendered | 3 of 5 requested | **5 of 5** |
+| Body type | 15px, ad-hoc | **14px, tokenised** |
+| Design tokens | none | **`@theme`: scale, 4 hues, neutrals** |
+| Focus rings | none anywhere | **one global rule** |
+| `h1` below 1024px | none | **in the header** |
+| Reduced-motion support | none | **all animation disabled** |
+
+### Checkpoint
+
+- [x] Type and colour come from tokens, not per-component literals.
+- [x] Navigation and the heading survive the sidebar's breakpoint.
+- [x] The operator route is visually distinct without a new colour.
+- [x] The handoff badge reflects real open escalations.
+- [ ] **Not yet walked in a browser.** tsc, eslint and the production build pass; nobody has looked.
+- [ ] The header's manual switcher is a native `<select>`. Accessible and correct, but it will not
+      match the artboard's drawn control on Windows.
+- [ ] Below 1024px the sidebar still hides, so **history remains unreachable** even though navigation
+      survives. A drawer would fix it; not built.
+- [ ] Chat surface and composer states are slices C and D, not started.

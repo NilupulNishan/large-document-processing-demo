@@ -1,0 +1,70 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Assistant \u2014 answered, with citations"
+    },
+    {
+      "file": "Inbox.dc.html",
+      "x": 1540,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Agent portal \u2014 the same bar, renamed"
+    },
+    {
+      "file": "Streaming.dc.html",
+      "x": 0,
+      "y": 1000,
+      "w": 900,
+      "h": 900,
+      "title": "Working \u2014 live trace"
+    },
+    {
+      "file": "States.dc.html",
+      "x": 1000,
+      "y": 1000,
+      "w": 1040,
+      "h": 1560,
+      "title": "Composer states and motion"
+    },
+    {
+      "file": "Components.dc.html",
+      "x": 2140,
+      "y": 1000,
+      "w": 1000,
+      "h": 1180,
+      "title": "Design system"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "header",
+      "x": 0,
+      "y": 2100,
+      "w": 420,
+      "text": "The global bar carries the app's only h1, so navigation and identity survive the breakpoint where the sidebar is hidden.\n\nOn /inbox it reads Agent portal, in green with a green top rule. Green already means \"a person is involved\" in this system, so the operator side wears it rather than inventing a sixth colour."
+    },
+    {
+      "id": "sidebar",
+      "x": 460,
+      "y": 2100,
+      "w": 420,
+      "text": "The manual appears in two places on purpose: the header shows the scope you are in, the sidebar list is where you change it.\n\nThey must always agree. If the header says BJ30 and the sidebar highlights X55, the screen is lying about which document the answers came from, which is the one thing this product cannot get wrong.\n\nBoth drive the same selection, so build them from one state, never two."
+    },
+    {
+      "id": "reference",
+      "x": 920,
+      "y": 2100,
+      "w": 420,
+      "text": "Reference: Cloudscape, the AWS console system. Open Sans on its exact type scale, 14px body.\n\nAmazon Ember is not licensable by third parties, so it is out.\n\nDeliberately not taking AWS identity: no AWS orange, no console chrome. If the demo looks like an AWS product, the client asks whether it is one."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

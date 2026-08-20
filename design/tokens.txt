@@ -1,0 +1,26 @@
+TYPE  Open Sans (Google Fonts) — Cloudscape scale, exact
+  display 42/48 700 | h-xl 24/30 700 | h-lg 20/24 700 | h-md 18/22 700
+  h-sm 16/20 700 | h-xs 14/18 700 | body 14/20 400 | small 12/16 400
+  mono Monaco, Menlo, Consolas, monospace 12/16
+
+NEUTRALS (cool, low chroma)
+  ground #f1f3f4  surface #ffffff  raised #fafbfc
+  border #d4d9de  divider #e6e9ec
+  ink #15191e  ink-2 #5a6572  ink-3 #8b949e
+
+SEMANTIC HUES — four meanings, no overlap (fixes audit 12)
+  blue   #2563eb  primary action + the user's own voice
+  green  #077d55  a human is involved (agent turn, handoff)   <- ONE meaning
+  indigo #4f46e5  from the manual
+  amber  #9a6700  not from the manual
+
+PROVENANCE — shape carries it, not just colour (protects D13)
+  manual        solid border, indigo #4f46e5 on #eef2ff, FileText
+  manual+gen    solid indigo + dashed amber right edge
+  general/web   DASHED border, amber #9a6700 on #fdf6e3, ExternalLink
+
+MOTION
+  enter    240ms cubic-bezier(.16,1,.3,1)  translateY(8px)+fade
+  step     180ms stagger 60ms; done = check scales 0->1
+  citation pill pulse 400ms + page band sweep 600ms
+  caret    1s step-end blink

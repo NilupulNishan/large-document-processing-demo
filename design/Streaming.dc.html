@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Open Sans", Helvetica, Arial, sans-serif;
+           color: #15191e; background: #ffffff; -webkit-font-smoothing: antialiased; }
+    a { color: #2563eb; } a:hover { color: #1d4ed8; }
+    * { box-sizing: border-box; }
+
+    /* One 7s cycle: five steps resolve, then the answer writes itself. */
+    .step { opacity: 0; animation: stepIn .34s cubic-bezier(.16,1,.3,1) forwards; }
+    @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .node { position: relative; width: 18px; height: 18px; flex-shrink: 0; }
+    .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid #2563eb;
+            opacity: 0; animation: live 1.4s ease-out infinite; }
+    @keyframes live { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
+
+    .tick { transform: scale(0); animation: pop .3s cubic-bezier(.34,1.56,.64,1) forwards; }
+    @keyframes pop { to { transform: scale(1); } }
+
+    /* The rail fills as the work completes — it measures progress, never fakes it. */
+    .fill { height: 0; animation: fill 4.6s cubic-bezier(.4,0,.2,1) forwards; }
+    @keyframes fill { to { height: 100%; } }
+
+    .word { opacity: 0; animation: word .01s linear forwards; }
+    @keyframes word { to { opacity: 1; } }
+
+    .caret { display: inline-block; width: 2px; height: 15px; background: #2563eb;
+             vertical-align: -2px; animation: blink 1s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</helmet>
+
+<div style="width: 900px; height: 900px; background: #ffffff; display: flex; flex-direction: column;">
+
+  <header style="padding: 14px 28px; border-bottom: 1px solid #e6e9ec; display: flex; align-items: baseline; gap: 10px;">
+    <h1 style="margin: 0; font-size: 18px; line-height: 22px; font-weight: 700;">BAIC BJ30 / E30</h1>
+    <span style="font-size: 12px; line-height: 16px; color: #8b949e;">working</span>
+  </header>
+
+  <div style="flex: 1; min-height: 0; padding: 28px; display: flex; flex-direction: column; gap: 22px;">
+
+    <div style="align-self: flex-end; max-width: 70%; background: {{accent}}; color: #ffffff; border-radius: 8px 8px 2px 8px; padding: 10px 14px; font-size: 14px; line-height: 20px;">
+      What torque do I tighten the wheel nuts to?
+    </div>
+
+    <!-- The trace is the product's proof, so it gets real estate while it runs. -->
+    <div style="border: 1px solid #e6e9ec; border-radius: 8px; background: #fafbfc; padding: 18px 20px;">
+      <div style="display: flex; gap: 14px;">
+
+        <div style="position: relative; width: 18px; flex-shrink: 0;">
+          <div style="position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: #e6e9ec;"></div>
+          <div class="fill" style="position: absolute; left: 8px; top: 4px; width: 2px; background: {{accent}};"></div>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 15px; margin-left: -32px; padding-left: 32px;">
+
+          <div class="step" style="animation-delay: 0s; display: flex; align-items: center; gap: 11px;">
+            <div class="node" style="margin-left: -32px;">
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#ffffff" stroke="#077d55" stroke-width="1.5"></circle><path class="tick" style="animation-delay: .5s; transform-origin: 9px 9px;" d="M5.5 9.2l2.4 2.4L12.6 6.6" fill="none" stroke="#077d55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <span style="font-size: 14px; line-height: 20px; color: #5a6572;">Read the message</span>
+          </div>
+
+          <div class="step" style="animation-delay: .8s; display: flex; align-items: center; gap: 11px;">
+            <div class="node" style="margin-left: -32px;">
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#ffffff" stroke="#077d55" stroke-width="1.5"></circle><path class="tick" style="animation-delay: 1.5s; transform-origin: 9px 9px;" d="M5.5 9.2l2.4 2.4L12.6 6.6" fill="none" stroke="#077d55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <span style="font-size: 14px; line-height: 20px; color: #5a6572;">Searched the manual</span>
+            <span style="font-size: 12px; line-height: 16px; color: #8b949e;">12 passages</span>
+          </div>
+
+          <div class="step" style="animation-delay: 1.8s; display: flex; align-items: center; gap: 11px;">
+            <div class="node" style="margin-left: -32px;">
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#ffffff" stroke="#077d55" stroke-width="1.5"></circle><path class="tick" style="animation-delay: 2.5s; transform-origin: 9px 9px;" d="M5.5 9.2l2.4 2.4L12.6 6.6" fill="none" stroke="#077d55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <span style="font-size: 14px; line-height: 20px; color: #5a6572;">Best match in Wheels and tyres</span>
+          </div>
+
+          <div class="step" style="animation-delay: 2.8s; display: flex; align-items: center; gap: 11px;">
+            <div class="node" style="margin-left: -32px;">
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#ffffff" stroke="#077d55" stroke-width="1.5"></circle><path class="tick" style="animation-delay: 3.5s; transform-origin: 9px 9px;" d="M5.5 9.2l2.4 2.4L12.6 6.6" fill="none" stroke="#077d55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <span style="font-size: 14px; line-height: 20px; color: #5a6572;">Checked the manual states the value</span>
+          </div>
+
+          <div class="step" style="animation-delay: 3.9s; display: flex; align-items: center; gap: 11px;">
+            <div class="node" style="margin-left: -32px;">
+              <div class="ring"></div>
+              <div class="ring" style="animation-delay: .7s;"></div>
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="4" fill="{{accent}}"></circle></svg>
+            </div>
+            <span style="font-size: 14px; line-height: 20px; font-weight: 600; color: #15191e;">Writing the answer</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size: 14px; line-height: 22px; color: #15191e;">
+      <span class="word" style="animation-delay: 4.9s;">Tighten the wheel nuts to </span><strong class="word" style="animation-delay: 5.1s; font-weight: 600;">110-130 N·m</strong><span class="word" style="animation-delay: 5.3s;">, in a diagonal sequence, with the vehicle</span><span class="word" style="animation-delay: 5.5s;"> lowered onto the ground.</span><span class="caret"></span>
+    </div>
+
+  </div>
+
+  <div style="padding: 16px 28px 22px; border-top: 1px solid #e6e9ec;">
+    <div style="border: 1px solid #d4d9de; border-radius: 8px; padding: 10px 10px 10px 14px; display: flex; align-items: center; gap: 10px; opacity: .55;">
+      <span style="flex: 1; font-size: 14px; line-height: 20px; color: #8b949e;">Answering</span>
+      <div style="width: 36px; height: 36px; border-radius: 4px; background: #eceff1;"></div>
+      <div style="width: 36px; height: 36px; border-radius: 4px; background: #eceff1;"></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#2563eb","options":["#2563eb","#0b7285","#4f46e5","#15191e"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2563eb' };
+  }
+}
+</script>
+</body>
+</html>

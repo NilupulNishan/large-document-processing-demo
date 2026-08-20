@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
+import AppHeader from "@/components/layout/app-header";
 import EscalationList from "./escalation-list";
 import EscalationPackageView from "./escalation-package";
 import { listEscalations, loadEscalation, type EscalationPackage } from "@/lib/api";
@@ -43,32 +43,28 @@ export default function InboxShell() {
   // Derived rather than stored: a loading flag set in the effect body is a cascading render.
   const loading = selected !== null && loadedId !== selected;
 
+  const waiting = items.filter((item) => item.status === "open").length;
+
   return (
-    <div className="h-screen w-full overflow-hidden bg-slate-100">
-      <div className="flex h-full gap-4 overflow-hidden bg-white p-4">
-        <aside className="flex w-80 shrink-0 flex-col rounded-xl bg-slate-50 p-3">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-ground">
+      <AppHeader variant="agent" openHandoffs={waiting} />
+
+      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden bg-surface p-4">
+        <aside className="flex w-80 shrink-0 flex-col rounded-lg border border-divider bg-raised p-3">
           <div className="mb-3 flex items-center justify-between px-1">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Inbox className="h-4 w-4" />
+            <span className="flex items-center gap-2 text-body font-semibold text-ink">
+              <Inbox className="h-4 w-4" strokeWidth={1.7} />
               Handoffs
             </span>
-            <span className="text-[11px] text-slate-400">{items.length}</span>
+            <span className="text-small text-ink-3">{items.length}</span>
           </div>
-
-          <Link
-            href="/"
-            className="mb-3 flex items-center gap-1.5 px-1 text-xs text-slate-500 transition hover:text-slate-800"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to chat
-          </Link>
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <EscalationList items={items} selected={selected} onSelect={setSelected} />
           </div>
         </aside>
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200">
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-divider">
           <EscalationPackageView pkg={pkg} loading={loading} />
         </main>
       </div>

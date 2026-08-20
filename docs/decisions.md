@@ -1199,3 +1199,43 @@ already existed, so this cost about fifteen lines.
 WebSocket server, and `POST /chat` remains SSE and one-directional. The dictation socket is opened by
 the browser directly to Azure — no audio and no socket touches this backend. Adjacent to the rule
 rather than inside it, and taken as an explicit decision rather than an oversight.
+
+---
+
+## D37 — The UI follows Cloudscape's system, not AWS's identity
+
+**Decision.** Open Sans on Cloudscape's type scale, tokens in Tailwind v4's `@theme`, four semantic
+hues with exactly one meaning each, and a global header carrying the app's only `h1`.
+
+**Why a reference at all.** The UI was Arial with ad-hoc sizes — `text-[15px]`, `text-[13px]`,
+`text-[11px]`, `text-[10px]` plus five Tailwind steps — and no tokens anywhere. Every polish pass
+meant editing every component.
+
+**Why Cloudscape and not `aws.amazon.com`.** They are two design languages. The marketing site is
+hero-led and sells; Cloudscape is what the AWS console runs on, is open source, and is documented
+down to the numbers, so it could be read rather than guessed at. This app is a working tool with a
+split pane, which is the problem Cloudscape is for. Body type moves 15px → **14px** as a result.
+
+**Amazon Ember is not available.** Commissioned from Dalton Maag for Amazon's exclusive use and not
+licensable by third parties, so it cannot ship in a client deliverable. Open Sans is what Cloudscape
+itself specifies, and `next/font` self-hosts it at build — no CDN, consistent with the PDF worker
+already being copied into `public/`.
+
+**The identity is deliberately not taken.** No AWS orange, no console chrome. If the demo looks like
+an AWS product the first question is whether it *is* one, which undermines the whole pitch.
+
+**Four hues, one meaning each.** Blue is the primary action and the user's own voice; indigo is from
+the manual; amber is not from the manual; green is a person being involved. Previously five hues
+competed and green carried two jobs. Cloudscape's rule — blue only for the primary action, red and
+green only for status, colour never the sole signal — is what makes provenance readable, and it is
+also why the citation pills keep **solid versus dashed borders**: that distinction survives greyscale
+and is D13 made visible.
+
+**The header exists for a structural reason, not a decorative one.** The sidebar is `hidden lg:flex`,
+so below 1024px the app had no navigation and no `h1` at all. The header carries both and survives
+that width. On `/inbox` it reads "Agent portal" in green — green already means a person is involved,
+so the operator side wears a colour the palette already owns rather than gaining a sixth.
+
+**The manual appears twice, on purpose.** The header names the scope, the sidebar switches it. Both
+read one selection in `container.tsx`. If they could disagree the screen would misreport which
+document an answer came from, which is the single thing this product cannot get wrong.

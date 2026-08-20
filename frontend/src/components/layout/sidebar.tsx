@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Inbox, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { Manual, SessionSummary } from "@/types/chat";
 
 type Props = {
@@ -29,128 +28,111 @@ export default function Sidebar({
   const [confirming, setConfirming] = useState<string | null>(null);
 
   return (
-    <aside className="hidden h-full w-72 shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 p-5 lg:flex">
-      <div className="mb-6 px-1">
-        {/* Named for what it does, not for whose manuals happen to be loaded. */}
-        <h1 className="text-lg font-black tracking-tight text-slate-900">
-          Manual <span className="text-blue-600">Assist</span>
-        </h1>
-        <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          Answers with the page
-        </p>
-      </div>
-
+    <aside className="hidden h-full w-62 shrink-0 flex-col border-r border-divider bg-surface p-3.5 lg:flex">
       <button
         onClick={onNewChat}
         disabled={!selectedManual}
-        className="mb-6 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-600 active:scale-95 disabled:opacity-40"
+        className="flex h-9 w-full items-center justify-center gap-1.5 rounded bg-action text-body font-semibold text-white transition-colors hover:bg-action-hover disabled:bg-ink-4"
       >
-        + New conversation
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+        New conversation
       </button>
 
-      <p className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-        Manual
-      </p>
-      <div className="mb-6 space-y-1.5">
+      {/* The header names the manual; this is where it changes. Both read one selection. */}
+      <p className="mt-5.5 mb-2 px-1 text-small font-bold text-ink-2">Manual</p>
+      <div className="flex flex-col gap-0.5">
         {manuals.length === 0 ? (
-          <p className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          <p className="rounded border border-divider px-2.5 py-2 text-body text-ink-3">
             No manuals indexed.
           </p>
         ) : (
-          manuals.map((manual) => (
-            <button
-              key={manual.id}
-              onClick={() => onSelectManual(manual.id)}
-              className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition ${
-                manual.id === selectedManual
-                  ? "border-slate-200 bg-white font-bold text-blue-600 shadow-sm"
-                  : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
-              }`}
-            >
-              <span className="block truncate">{manual.title}</span>
-              <span className="text-[11px] font-normal text-slate-400">
-                {manual.page_count} pages
-              </span>
-            </button>
-          ))
+          manuals.map((manual) => {
+            const active = manual.id === selectedManual;
+            return (
+              <button
+                key={manual.id}
+                onClick={() => onSelectManual(manual.id)}
+                aria-current={active ? "true" : undefined}
+                className={`rounded-r border-l-2 px-2.5 py-2 text-left transition-colors ${
+                  active
+                    ? "border-action bg-action-soft"
+                    : "border-transparent hover:bg-raised"
+                }`}
+              >
+                <span
+                  className={`block truncate text-body ${active ? "font-semibold text-ink" : "text-ink"}`}
+                >
+                  {manual.title}
+                </span>
+                <span className="text-small text-ink-3">{manual.page_count} pages</span>
+              </button>
+            );
+          })
         )}
       </div>
 
-      <p className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-        History
-      </p>
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+      <p className="mt-5 mb-2 px-1 text-small font-bold text-ink-2">History</p>
+      <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto">
         {sessions.length === 0 ? (
-          <p className="px-1 text-xs text-slate-400">Nothing yet.</p>
+          <p className="px-1 text-small text-ink-3">Nothing yet.</p>
         ) : (
           sessions.map((session) => {
             const armed = session.id === confirming;
+            const active = session.id === selectedSession;
             return (
               // A div, not a button: the delete control cannot be nested inside the select
               // button, and a button inside a button is invalid HTML.
               <div
                 key={session.id}
-                className={`group flex items-center rounded-lg transition ${
-                  session.id === selectedSession
-                    ? "bg-white shadow-sm"
-                    : "hover:bg-white"
+                className={`group flex items-center rounded transition-colors ${
+                  active ? "bg-action-soft" : "hover:bg-raised"
                 }`}
               >
+                <button
+                  onClick={() => onSelectSession(session.id)}
+                  title={session.title}
+                  className={`min-w-0 flex-1 px-2.5 py-2 text-left text-body ${
+                    active ? "font-semibold text-ink" : "text-ink-2 group-hover:text-ink"
+                  }`}
+                >
+                  <span className="block truncate">{session.title}</span>
+                </button>
+
+                {/* The name stays visible while confirming: you should be able to see what
+                    you are about to delete. */}
                 {armed ? (
-                  <div className="flex w-full items-center gap-1 px-3 py-2">
-                    <span className="flex-1 truncate text-xs text-slate-500">Delete?</span>
+                  <span className="flex shrink-0 items-center gap-1 pr-1.5">
                     <button
                       onClick={() => {
                         setConfirming(null);
                         onDeleteSession(session.id);
                       }}
-                      className="rounded px-2 py-0.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                      className="rounded px-1.5 py-0.5 text-small font-semibold text-danger hover:bg-danger/10"
                     >
-                      Yes
+                      Delete
                     </button>
                     <button
                       onClick={() => setConfirming(null)}
-                      className="rounded px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100"
+                      className="rounded px-1.5 py-0.5 text-small text-ink-2 hover:bg-divider"
                     >
-                      No
+                      Keep
                     </button>
-                  </div>
+                  </span>
                 ) : (
-                  <>
-                    <button
-                      onClick={() => onSelectSession(session.id)}
-                      title={session.title}
-                      className={`min-w-0 flex-1 px-3 py-2 text-left text-xs transition ${
-                        session.id === selectedSession
-                          ? "font-semibold text-slate-900"
-                          : "text-slate-500 group-hover:text-slate-800"
-                      }`}
-                    >
-                      <span className="block truncate">{session.title}</span>
-                    </button>
-                    <button
-                      onClick={() => setConfirming(session.id)}
-                      aria-label={`Delete ${session.title}`}
-                      title="Delete this conversation"
-                      className="mr-1 rounded p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
+                  <button
+                    onClick={() => setConfirming(session.id)}
+                    aria-label={`Delete ${session.title}`}
+                    title="Delete this conversation"
+                    className="mr-1.5 shrink-0 rounded p-1.5 text-ink-4 opacity-0 transition hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
             );
           })
         )}
       </div>
-
-      <Link
-        href="/inbox"
-        className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:bg-white hover:text-slate-800"
-      >
-        <Inbox className="h-3.5 w-3.5" />
-        Operator inbox
-      </Link>
     </aside>
   );
 }

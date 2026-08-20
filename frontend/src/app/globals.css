@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+/**
+ * Tokens. Cloudscape's type scale, and four hues each carrying exactly one meaning:
+ * blue is the primary action and the user's own voice, indigo is from the manual,
+ * amber is not from the manual, green is a person being involved. Nothing means two
+ * things, so colour can be read.
+ */
+@theme {
+  --font-sans: var(--font-open-sans), Helvetica, Arial, sans-serif;
+  --font-mono: Monaco, Menlo, Consolas, "Courier New", monospace;
+
+  /* Cloudscape scale. Body is 14px, not 15. */
+  --text-display: 2.625rem;
+  --text-display--line-height: 3rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.875rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.5rem;
+  --text-md: 1.125rem;
+  --text-md--line-height: 1.375rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.125rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-small: 0.75rem;
+  --text-small--line-height: 1rem;
+
+  /* Neutrals, cool and low chroma. */
+  --color-ground: #f1f3f4;
+  --color-surface: #ffffff;
+  --color-raised: #fafbfc;
+  --color-line: #d4d9de;
+  --color-divider: #e6e9ec;
+  --color-ink: #15191e;
+  --color-ink-2: #5a6572;
+  --color-ink-3: #8b949e;
+  --color-ink-4: #c2c8cf;
+
+  /* One meaning each. */
+  --color-action: #2563eb;
+  --color-action-hover: #1d4ed8;
+  --color-action-soft: #f0f5ff;
+  --color-manual: #4f46e5;
+  --color-manual-ink: #4338ca;
+  --color-manual-soft: #eef2ff;
+  --color-manual-line: #c7d2fe;
+  --color-general: #9a6700;
+  --color-general-soft: #fdf6e3;
+  --color-general-line: #d8b365;
+  --color-person: #077d55;
+  --color-person-soft: #e9f7f1;
+  --color-person-line: #a7d8c4;
+  --color-danger: #b42318;
+  --color-danger-line: #e3b7b7;
+
+  /* One easing for entrances, one for anything that should feel physical. */
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 html,
 body,
 :root {
@@ -8,5 +69,69 @@ body,
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keyboard traversal was invisible everywhere. One rule covers every control. */
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes pop {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes live {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-enter {
+  animation: enter 0.24s var(--ease-enter) both;
+}
+.animate-pop {
+  animation: pop 0.3s var(--ease-spring) both;
+}
+.animate-live {
+  animation: live 1.4s ease-out infinite;
+}
+.animate-breathe {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+/* Motion here is decoration over information, never the information itself, so it is
+   safe to remove entirely. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
