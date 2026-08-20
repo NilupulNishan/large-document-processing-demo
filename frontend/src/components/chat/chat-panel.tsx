@@ -22,12 +22,12 @@ export default function ChatPanel({
   onPageClick,
 }: Props) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-      <div className="border-b border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-base font-semibold text-slate-800">
+    <div className="flex h-full flex-col overflow-hidden bg-surface">
+      <div className="border-b border-divider px-6 py-3.5">
+        <h2 className="text-sm font-bold text-ink">
           {manualTitle || "Select a manual"}
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-small text-ink-3">
           Ask a question or describe a fault.
         </p>
       </div>
@@ -35,7 +35,7 @@ export default function ChatPanel({
       <div className="min-h-0 flex-1 overflow-hidden">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-8 text-center">
-            <p className="max-w-sm text-sm text-slate-400">
+            <p className="max-w-sm text-body text-ink-2">
               Answers come with the page they came from. Click a page to open it
               alongside.
             </p>

@@ -1239,3 +1239,39 @@ so the operator side wears a colour the palette already owns rather than gaining
 **The manual appears twice, on purpose.** The header names the scope, the sidebar switches it. Both
 read one selection in `container.tsx`. If they could disagree the screen would misreport which
 document an answer came from, which is the single thing this product cannot get wrong.
+
+---
+
+## D38 — The transcript follows the reader, and a long answer is not a chat bubble
+
+**Decision.** The message list follows a stream only while the reader is within 80px of the bottom; a
+new message always re-pins; token growth scrolls with `auto` and a new message with `smooth`. Assistant
+answers render full-width without a bubble; typed turns keep one. Citation pills are 32px.
+
+**Why the scroll rule.** The old effect called `scrollIntoView({behavior:"smooth"})` on every change to
+`messages`, and a streamed answer changes it on every token. Scrolling up to re-read pulled you back
+within milliseconds. The fix has to distinguish two intents that look identical to the effect: *the
+answer grew* (follow only if they were already following) and *I just asked something* (follow
+regardless, because sending is a request to be at the bottom). Message count separates them.
+
+**Easing differs by cause deliberately.** A smooth scroll retriggered every few milliseconds animates
+against itself, so token growth jumps and only a new message animates.
+
+**Freeing the reader creates a second problem**, so "Jump to latest" appears whenever they have
+scrolled away while an answer is still arriving. Without it, the fix silently hides that the assistant
+is mid-sentence.
+
+**The scroll listener sets state only on change.** Setting it per event would re-render the whole
+transcript on every scroll frame during streaming, which is a worse defect than the one being fixed.
+
+**Why the assistant leaves the bubble.** Assistant turns carry full markdown — tables, code blocks,
+ordered lists. `max-w-[85%]` inside a 55% pane is roughly 46% of the window, and `markdownComponents`
+already needed `overflow-x-auto` on tables to survive it. A bubble is right for a typed sentence and
+wrong for a document fragment. Typed turns keep theirs, which also keeps the human/assistant
+distinction D24 depends on.
+
+**On target size, correcting the audit that prompted this.** The audit called 24px pills "well under
+the 44px floor". There is no 44px floor: WCAG 2.2 SC 2.5.8 Target Size (Minimum) is **AA at 24×24**,
+and 44×44 is SC 2.5.5, **AAA**. The pills already met AA. 32px is chosen because it is the most
+important click in the product and the density suits a three-pane tool — not to fix a violation that
+did not exist.

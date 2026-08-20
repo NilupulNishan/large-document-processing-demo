@@ -2645,3 +2645,89 @@ The eval harness was not run: nothing here touches ingestion, retrieval, reranki
 - [ ] Below 1024px the sidebar still hides, so **history remains unreachable** even though navigation
       survives. A drawer would fix it; not built.
 - [ ] Chat surface and composer states are slices C and D, not started.
+
+---
+
+## Slice 28 — the chat surface: a trace worth looking at, and a transcript that stays put
+
+### Outcome
+
+The pipeline trace becomes a rail that shows what finished and what is running; assistant answers
+leave the chat bubble; and the transcript stops dragging the reader back down mid-answer. Frontend
+only.
+
+### The trace was the proof and looked like debug output
+
+`status-pills.tsx` rendered 12px grey text with a 6px dot. It is the evidence that retrieval, grading
+and the gate actually ran — the thing the whole pitch rests on — and it read as console noise.
+
+It is now a rail: a line filling only as far as the last **completed** step, a green check that pops
+in per finished step, a pulsing node on the one in flight, entry staggered 60ms apart. Done versus
+running is derived from the props already passed, so no data model changed.
+
+**There is no progress bar creeping toward a total**, because nothing knows the total. A bar that
+implies known progress would be exactly the invented-stage problem D9 forbids.
+
+And it now collapses. The trace stayed expanded forever, so after six turns half the transcript was
+pipeline output; it folds to a `{n} steps` disclosure once the answer lands.
+
+### A long answer is not a chat bubble
+
+Assistant turns carried tables and code blocks inside `max-w-[85%] rounded-3xl` — about 46% of the
+window once the pane split is counted, which is why `markdownComponents.table` already needed
+`overflow-x-auto` to cope. Assistant answers now take the full column; typed turns keep a bubble,
+which also preserves the human-versus-assistant distinction D24 depends on.
+
+### The scroll fix, and the second problem it created
+
+The old effect followed the stream on **every** change to `messages`, which during token streaming is
+continuous. Scrolling up to re-read yanked you back on the next token.
+
+Two intents look identical to that effect and had to be separated by message count: *the answer grew*
+follows only if the reader was already at the bottom; *I just asked something* always follows, because
+sending is a request to be at the bottom. Token growth jumps (`auto`) and only a new message animates
+(`smooth`) — a smooth scroll retriggered every few milliseconds fights itself.
+
+Freeing the reader then hides that an answer is still arriving, so **"Jump to latest"** appears while
+they are away and a stream is live. The scroll listener sets state only when the answer changes; per
+event it would re-render the transcript on every scroll frame, which is worse than the original bug.
+
+### A correction carried into the code
+
+The audit called the 24px citation pills "well under the 44px floor". **There is no 44px floor** —
+WCAG 2.2 SC 2.5.8 is AA at 24×24; 44×44 is SC 2.5.5, AAA. They already met AA. They are now 32px
+because it is the most important click in the product, not because a rule was being broken. The
+Components artboard drew them at 44px and is the thing that is wrong.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Trace while running | 12px grey text, one pulsing dot | **rail with per-step completion** |
+| Trace after answering | stays expanded forever | **collapses to `{n} steps`** |
+| Assistant answer width | `max-w-[85%]` bubble | **full column, no bubble** |
+| Scrolling up mid-stream | dragged back on the next token | **stays put, offers Jump to latest** |
+| Scroll easing | smooth on every token | **auto for tokens, smooth for new turns** |
+| Citation pills | 24px, slate/indigo literals | **32px, tokens, solid vs dashed kept** |
+| `transition-all` on a growing element | yes | **transition-colors** |
+
+### Checkpoint
+
+- [x] The trace shows what finished and what is running, and invents nothing.
+- [x] It collapses once the answer lands.
+- [x] Long-form answers get the column width.
+- [x] Page and web citations stay distinguishable by border style, not colour alone (D13).
+- [ ] **Not walked in a browser.** All three checks pass; the scroll behaviour in particular cannot be
+      verified by a build and every failure mode of it passes one.
+- [ ] `MessageItem` is shared with the operator transcript
+      (`inbox/escalation-package.tsx:132`), which changed shape and has not been looked at.
+- [ ] The citation click acknowledges itself, but the PDF pane does not respond — the sweep needs
+      `pdf-viewer.tsx` and is not built.
+- [ ] `chat-panel.tsx` moved onto tokens; its empty state is still the old grey-on-grey wording.

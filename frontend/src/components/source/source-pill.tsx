@@ -14,10 +14,13 @@ type Props = {
  * Page and web pills must not look alike. An unmarked general-knowledge answer
  * about a real vehicle is the worst output this system can produce, and
  * identical pills are how that happens (D13).
+ *
+ * The difference is carried by border style as well as colour — solid against dashed —
+ * so it survives greyscale, a printout and a colour-vision deficiency.
  */
 export default function SourcePill({ kind, label, title, onClick, href }: Props) {
   const shared =
-    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition active:scale-95";
+    "inline-flex h-8 items-center gap-1.5 rounded border px-3.5 text-body font-semibold transition-colors active:scale-95";
 
   if (kind === "web") {
     return (
@@ -26,9 +29,9 @@ export default function SourcePill({ kind, label, title, onClick, href }: Props)
         target="_blank"
         rel="noopener noreferrer"
         title={title}
-        className={`${shared} border-dashed border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400 hover:bg-amber-100`}
+        className={`${shared} border-dashed border-general-line bg-general-soft text-general hover:bg-general-soft/70`}
       >
-        <ExternalLink size={12} />
+        <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
         {label}
       </a>
     );
@@ -38,9 +41,9 @@ export default function SourcePill({ kind, label, title, onClick, href }: Props)
     <button
       onClick={onClick}
       title={title}
-      className={`${shared} border-solid border-indigo-200 bg-indigo-50 text-indigo-800 hover:border-indigo-400 hover:bg-indigo-100`}
+      className={`${shared} border-solid border-manual-line bg-manual-soft text-manual-ink hover:border-manual hover:bg-manual-line/40`}
     >
-      <FileText size={12} />
+      <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
       {label}
     </button>
   );
