@@ -42,6 +42,10 @@ export default function PdfViewer({ url, page = 1 }: Props) {
   // The page a citation asked for, briefly, so the jump is legible as an answer
   // to the click rather than an unexplained scroll.
   const [located, setLocated] = useState<number | null>(null);
+  // Bumped to remount <Document> after a failed fetch. A dropped connection — the API
+  // restarting, a flaky moment — otherwise leaves the pane dead until the whole page is
+  // reloaded, and half the screen is a bad thing to lose in front of someone.
+  const [attempt, setAttempt] = useState(0);
 
   const frameRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -173,6 +177,7 @@ export default function PdfViewer({ url, page = 1 }: Props) {
             </p>
           ) : (
             <Document
+              key={attempt}
               file={url}
               options={PDF_OPTIONS}
               onLoadSuccess={({ numPages: total }) => setNumPages(total)}
@@ -182,9 +187,18 @@ export default function PdfViewer({ url, page = 1 }: Props) {
                 </p>
               }
               error={
-                <p className="rounded border border-danger-line bg-surface px-4 py-6 text-body text-danger">
-                  Could not open this manual.
-                </p>
+                <div className="rounded border border-danger-line bg-surface px-4 py-6 text-center">
+                  <p className="text-body text-danger">Could not open this manual.</p>
+                  <p className="mt-1 text-small text-ink-2">
+                    The connection dropped, or the API is not answering.
+                  </p>
+                  <button
+                    onClick={() => setAttempt((n) => n + 1)}
+                    className="mt-3 h-8 rounded border border-line px-3 text-body font-semibold text-ink transition-colors hover:bg-raised"
+                  >
+                    Try again
+                  </button>
+                </div>
               }
               className="flex w-full flex-col items-center"
             >

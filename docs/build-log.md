@@ -3078,3 +3078,76 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
       been spoken to.
 - [ ] The inbox now pays the 7 MB SDK download on an agent's first mic press, same as the chat side.
       Lazy, so nothing is paid until then.
+
+---
+
+## Slice 33 — reconciling the code with the design
+
+### Outcome
+
+The canvas and the app agree again. Four divergences corrected in the code, four in the artboards,
+and the rest verified as matching rather than assumed to.
+
+### What already matched, checked rather than trusted
+
+Every semantic hex in the artboards exists as a token in `globals.css`. The only artboard-only values
+are one-off hover and disabled shades where the code derives from tokens instead — the code is the
+better of the two, so nothing changed. Header 52px, sidebar 248px, composer buttons 36px, page
+controls 32px: all as drawn. Provenance still solid-versus-dashed (D13).
+
+### The manual was still named twice
+
+`chat-panel.tsx` rendered the manual title while the global header already carried it in the switcher.
+**This was my own inconsistency:** Slice 30 removed the title from the PDF toolbar on exactly this
+reasoning and left it here.
+
+The panel now names the **conversation**, with "Answers cite the page they came from" beneath it —
+which states the premise rather than repeating an instruction the placeholder already gives. A session
+is literally called "New conversation" until the first question renames it, so it falls back to the
+manual until then.
+
+### Three unlabelled things in the inbox
+
+The reason block had no heading at all — an unlabelled amber box reads as a warning rather than an
+explanation. It is now **"Why it came to you"**, the transcript is **"What they tried"** rather than
+"The conversation so far", and the button is **"Send reply"**.
+
+### Where the artboards were wrong
+
+- **The Components sheet drew 44px citation pills** against 32px shipped — and against `Main.dc.html`,
+  which already drew 32px. The sheet disagreed with itself. Its note also claimed the build was
+  breaking a 44px floor; there is no such floor (WCAG 2.2 AA is 24×24), so the note was corrected
+  rather than the code.
+- **`States.dc.html` drew nine composer states**; the code has ten. `starting` earned its place by
+  fixing the duplicate-dictation bug, and the sheet now shows it with the reason.
+- **Its handed-over state drew a locked composer**, which is the bug that broke D24's two-way handoff.
+  Now drawn as a usable composer with a green border.
+- **An account avatar** in both shells, never built, and `AGENTS.md` lists authentication as a
+  non-goal — so it implied a feature that does not exist. Removed from the artboards.
+- The focus note said focus was "currently invisible everywhere in the build", which stopped being
+  true in Slice 27.
+
+### Housekeeping
+
+`design/manual-assist-ui.html` is 2.2 MB of generated editor payload, regenerable from the `.dc.html`
+sources beside it, and was committed. Now gitignored and untracked. History keeps the blob, which is
+not worth a rewrite for 2.2 MB.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Checkpoint
+
+- [x] The manual is named once on screen.
+- [x] The inbox labels match the design.
+- [x] The artboards describe the app that exists, in ten states rather than nine.
+- [x] The generated payload is out of version control.
+- [ ] **Not walked in a browser since these changes.** The conversation-title fallback in particular
+      has a case worth seeing: a brand-new session before its first question.
+- [ ] A test message I wrote is still in the database — `3ede7bdca8b1`, an agent turn reading
+      "allowed while open". It will appear in a demo transcript.
+- [ ] The wading misroute and the Quality tab remain the two open items with real weight.

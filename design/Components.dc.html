@@ -58,20 +58,20 @@
     <p class="lbl" style="margin: 0 0 6px;">Provenance, carried by shape as well as colour</p>
     <p class="note" style="margin: 0 0 14px;">A page citation and a web citation must never be confusable at a glance. Solid border versus dashed does that even in greyscale.</p>
     <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-      <button style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px solid #c7d2fe; border-radius: 4px; background: #eef2ff; font-family: inherit; font-size: 14px; font-weight: 600; color: #4338ca; cursor: pointer;">
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px solid #c7d2fe; border-radius: 4px; background: #eef2ff; font-family: inherit; font-size: 14px; font-weight: 600; color: #4338ca; cursor: pointer;">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h7l3 3v11H5V3Z"></path><path d="M12 3v3h3"></path></svg>
         Page 127
       </button>
-      <button style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px dashed #d8b365; border-radius: 4px; background: #fdf6e3; font-family: inherit; font-size: 14px; font-weight: 600; color: #9a6700; cursor: pointer;">
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px dashed #d8b365; border-radius: 4px; background: #fdf6e3; font-family: inherit; font-size: 14px; font-weight: 600; color: #9a6700; cursor: pointer;">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4h5v5"></path><path d="M16 4l-7 7"></path><path d="M14 12v4H4V6h4"></path></svg>
         baic-global.com
       </button>
-      <span style="display: inline-flex; align-items: center; gap: 7px; height: 44px; padding: 0 14px; border: 1px solid #a7d8c4; border-radius: 4px; background: #e9f7f1; font-size: 14px; font-weight: 600; color: #077d55;">
+      <span style="display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px solid #a7d8c4; border-radius: 4px; background: #e9f7f1; font-size: 14px; font-weight: 600; color: #077d55;">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>
         Passed to a specialist
       </span>
     </div>
-    <p class="note" style="margin: 12px 0 0;">All three are 44px tall. The current build ships these at 24px, well under a usable target.</p>
+    <p class="note" style="margin: 12px 0 0;">All three are 32px tall. WCAG 2.2 puts the minimum target at 24&times;24 (AA), so the previous 24px pills already passed; 32px is chosen because this is the most important click in the product, not to fix a violation.</p>
   </div>
 
   <div>
@@ -83,7 +83,7 @@
       <button style="height: 36px; padding: 0 16px; border: 1px solid #d4d9de; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #15191e; outline: 2px solid {{accent}}; outline-offset: 2px;">Focus visible</button>
       <button style="height: 36px; padding: 0 16px; border: 1px solid #e3b7b7; border-radius: 4px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; color: #b42318; cursor: pointer;">Delete</button>
     </div>
-    <p class="note" style="margin: 12px 0 0;">Focus is currently invisible everywhere in the build. Every interactive element gets this ring.</p>
+    <p class="note" style="margin: 12px 0 0;">One <code>:focus-visible</code> rule covers every interactive element, so keyboard traversal is visible everywhere.</p>
   </div>
 
   <div>

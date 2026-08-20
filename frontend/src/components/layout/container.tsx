@@ -144,6 +144,9 @@ export default function AppShell() {
               <div className="h-full min-h-0 min-w-0 overflow-hidden">
                 <ChatPanel
                   manualTitle={manual?.title}
+                  conversationTitle={
+                    sessions.find((item) => item.id === sessionId)?.title
+                  }
                   messages={messages}
                   busy={busy}
                   ready={Boolean(sessionId)}

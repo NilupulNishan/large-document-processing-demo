@@ -6,7 +6,11 @@ import MessageList from "./message-list";
 import type { Message } from "@/types/chat";
 
 type Props = {
+  /** The manual, used only until a conversation has a name of its own. */
   manualTitle?: string;
+  /** What this conversation is about. The header names it; the global bar names the
+   *  manual, so neither repeats the other. */
+  conversationTitle?: string;
   messages: Message[];
   busy: boolean;
   ready: boolean;
@@ -19,6 +23,7 @@ type Props = {
 
 export default function ChatPanel({
   manualTitle,
+  conversationTitle,
   messages,
   busy,
   ready,
@@ -27,14 +32,19 @@ export default function ChatPanel({
   onStop,
   onPageClick,
 }: Props) {
+  // A session is called "New conversation" until the first question renames it, which is
+  // a worse heading than the manual it is scoped to.
+  const named =
+    conversationTitle && conversationTitle !== "New conversation" ? conversationTitle : null;
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface">
       <div className="border-b border-divider px-6 py-3.5">
-        <h2 className="text-sm font-bold text-ink">
-          {manualTitle || "Select a manual"}
+        <h2 className="truncate text-sm font-bold text-ink">
+          {named || manualTitle || "Select a manual"}
         </h2>
         <p className="text-small text-ink-3">
-          Ask a question or describe a fault.
+          Answers cite the page they came from
         </p>
       </div>
 

@@ -48,7 +48,7 @@
 
   <div>
     <p style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">Composer states, and every animation</p>
-    <p style="margin: 4px 0 0;" class="note">Nine states the input can be in. The control and the line beneath it always agree about what is happening.</p>
+    <p style="margin: 4px 0 0;" class="note">Ten states the input can be in. The control and the line beneath it always agree about what is happening.</p>
   </div>
 
   <div style="display: flex; flex-direction: column; gap: 20px;">
@@ -91,7 +91,20 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">4 · Listening</p>
+      <p class="stn" style="margin: 0;">4 · Opening the mic</p>
+      <div>
+        <div class="box">
+          <span class="txt" style="color: #8b949e;">Ask a question, or describe the fault</span>
+          <div class="ico" style="border: 1px solid #d4d9de;"><svg class="a-spin" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#5a6572" stroke-width="2" stroke-linecap="round"><path d="M10 2.5a7.5 7.5 0 1 1-7.5 7.5"></path></svg></div>
+          <div class="ico" style="background: #eceff1;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#c2c8cf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
+        </div>
+        <p class="foot">Opening the microphone</p>
+        <p class="note" style="margin: 4px 0 0 2px;">A token fetch, a 7&nbsp;MB download and a socket, so roughly a second on first use. Without a state of its own the button looked idle, people pressed it twice, and every phrase arrived twice.</p>
+      </div>
+    </div>
+
+    <div class="st">
+      <p class="stn" style="margin: 0;">5 · Listening</p>
       <div>
         <div class="box" style="border-color: {{accent}}; box-shadow: 0 0 0 3px rgba(37,99,235,.1);">
           <span class="txt">What torque do I tighten <span class="a-breathe" style="color: #5a6572;">the wheel nuts to</span></span>
@@ -107,7 +120,7 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">5 · Transcribing</p>
+      <p class="stn" style="margin: 0;">6 · Transcribing</p>
       <div>
         <div class="box">
           <span class="txt" style="color: #8b949e;">What torque do I tighten the wheel nuts to</span>
@@ -119,7 +132,7 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">6 · Answering</p>
+      <p class="stn" style="margin: 0;">7 · Answering</p>
       <div>
         <div class="box" style="background: #fafbfc;">
           <span class="txt" style="color: #c2c8cf;">Ask a question, or describe the fault</span>
@@ -131,7 +144,7 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">7 · Fell back</p>
+      <p class="stn" style="margin: 0;">8 · Fell back</p>
       <div>
         <div class="box" style="border-color: #d8b365;">
           <span class="txt" style="color: #8b949e;">Recording</span>
@@ -144,7 +157,7 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">8 · Heard nothing</p>
+      <p class="stn" style="margin: 0;">9 · Heard nothing</p>
       <div>
         <div class="box">
           <span class="txt" style="color: #8b949e;">Ask a question, or describe the fault</span>
@@ -156,13 +169,16 @@
     </div>
 
     <div class="st">
-      <p class="stn" style="margin: 0;">9 · A person has it</p>
+      <p class="stn" style="margin: 0;">10 · A person has it</p>
       <div>
         <div class="box" style="border-color: #a7d8c4; background: #f6fbf9;">
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#077d55" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>
-          <span class="txt" style="color: #15191e;">A specialist has this conversation. Replies come from them.</span>
+          <span class="txt" style="color: #15191e;">What torque should I use instead?</span>
+          <div class="ico" style="border: 1px solid #a7d8c4;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#077d55" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"></rect><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17"></path></svg></div>
+          <div class="ico" style="background: #077d55;"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13M11 5l5 5-5 5"></path></svg></div>
         </div>
-        <p class="foot">The assistant writes nothing while a handoff is open</p>
+        <p class="foot" style="color: #077d55;">A specialist has this conversation. Your reply goes to them.</p>
+        <p class="note" style="margin: 4px 0 0 2px;">The composer stays usable. A handoff is a conversation, not a dead end &mdash; the user&rsquo;s turn is stored for the agent to read.</p>
       </div>
     </div>
 

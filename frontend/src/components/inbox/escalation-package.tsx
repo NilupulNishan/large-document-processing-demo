@@ -166,7 +166,10 @@ export default function EscalationPackageView({
         <p className="mt-3 text-sm font-semibold text-ink">{pkg.question}</p>
 
         {/* The rule that fired, not a constant — D14's triggers each write their own reason. */}
-        <div className="mt-3 flex items-start gap-2 rounded border border-general-line bg-general-soft px-3 py-2">
+        <p className="mt-3 text-small font-bold uppercase tracking-wide text-ink-2">
+          Why it came to you
+        </p>
+        <div className="mt-1.5 flex items-start gap-2 rounded border border-general-line bg-general-soft px-3 py-2">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-general" />
           <p className="text-small leading-4 text-general">{pkg.reason}</p>
         </div>
@@ -211,7 +214,7 @@ export default function EscalationPackageView({
         )}
 
         <p className="mb-3 text-small font-bold uppercase tracking-wide text-ink-3">
-          The conversation so far
+          What they tried
         </p>
         <div className="space-y-5">
           {transcript.map((stored) => (
@@ -277,7 +280,7 @@ export default function EscalationPackageView({
             className="flex h-9 items-center gap-1.5 rounded bg-person px-3.5 text-body font-semibold text-white transition-colors hover:brightness-110 disabled:bg-divider disabled:text-ink-4"
           >
             <Send className="h-3.5 w-3.5" />
-            Send
+            Send reply
           </button>
         </form>
       )}
