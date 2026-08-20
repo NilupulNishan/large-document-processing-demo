@@ -166,8 +166,6 @@ export default function AppShell() {
                   // in an effect.
                   key={manual?.id ?? "none"}
                   url={manual ? pdfUrl(manual.id) : undefined}
-                  title={manual?.title}
-                  subtitle={manual ? `${manual.page_count} pages` : undefined}
                   page={page}
                 />
               </div>

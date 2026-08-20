@@ -2845,3 +2845,77 @@ npm exec tsc -b --pretty false && npm run lint && npm run build
 - [ ] The **PDF page sweep** on taking a citation is still not built — the most demo-visible thing
       missing from the design.
 - [ ] The header's manual switcher is a native `<select>`, not the artboard's drawn control.
+
+---
+
+## Slice 30 — the document pane, and the moment a citation pays off
+
+### Outcome
+
+The PDF pane joins the design system, and taking a citation now visibly connects the two panes
+instead of silently scrolling one of them.
+
+### It had been left behind
+
+Slices A to D covered type, shell, chat surface and composer. The document pane — **45% of the
+screen** — was in none of them, and still carried fourteen slate literals, `rounded-2xl` cards, text
+buttons and a `type="number"` box with spinner arrows at 30px. Beside the tokenised chat surface the
+seam was going to be the first thing anyone noticed.
+
+### The manual's name appeared three times
+
+Global header, chat panel header, PDF toolbar. With D37's header naming the manual and its page count,
+the pane a document is already visible in does not need to say which document it is — it needs to say
+where in it you are. The toolbar is now `Page N of M` plus icon controls, and `title`/`subtitle` are
+gone from `PdfViewer` altogether.
+
+The page box moved from `type="number"` to `type="text"` with `inputMode="numeric"`: the spinner arrows
+were noise on a 32px control, and a numeric keypad still appears on a phone.
+
+### The citation finally pays off
+
+Clicking a page citation used to change the scroll position and nothing else, so the panes read as
+unrelated — an answer on the left, an unexplained jump on the right. The page a citation names now
+rings for about a second in `--color-manual`, the same hue as the pill that was clicked.
+
+This is the interaction the product's whole argument rests on, and it had been listed as missing in
+three consecutive checkpoints.
+
+### A lint rule suppressed, with its reasoning in the code
+
+`react-hooks/set-state-in-effect` fires on the effect that reacts to the `page` prop. Reacting to an
+external change with transient UI that decays on a timer is the case the rule's own docs allow, and
+the alternatives were a ref-and-DOM hack or a token prop that relocates the problem.
+
+Note for whoever meets it next: the rule traces **into** `jump()`, so that effect was already setting
+state this way. The ring made it visible to the linter; it did not introduce it.
+
+### Commands
+
+```bash
+cd frontend
+npm exec tsc -b --pretty false && npm run lint && npm run build
+```
+
+### Observed
+
+| | before | after |
+|---|---|---|
+| Old-palette literals in the pane | 14 | **0** |
+| Manual title on screen | 3 places | **1** |
+| Page controls | text buttons, no labels | **icon buttons with `aria-label`** |
+| Page box | `type="number"`, spinners | `inputMode="numeric"`, none |
+| Taking a citation | scroll position changed, silently | **the page rings for ~1s** |
+
+### Checkpoint
+
+- [x] The pane is on the design system.
+- [x] The manual is named once on screen, not three times.
+- [x] A citation visibly connects the answer to the page.
+- [ ] **Not walked in a browser.** Nor has any of slices C or D beyond the dictation path.
+- [ ] The **inbox interior** is still untouched — `escalation-list.tsx` and
+      `escalation-package.tsx` carry 32 old-palette literals between them.
+- [ ] The inbox artboard draws **Pick up / Close** buttons and filter chips. `PATCH /escalations/{id}`
+      exists on the backend but `lib/api.ts` has **no client function for it**, so the design promises
+      a capability the frontend cannot perform. Either build it or take it out of the artboard.
+- [ ] The header's manual switcher is a native `<select>`, not the artboard's drawn control.

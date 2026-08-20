@@ -1329,3 +1329,32 @@ recogniser rather than leaving it connected beside the fallback recorder.
 **Elapsed time is client-measured.** `Message.elapsedMs` is stamped in the browser and marked as such
 in `types/chat.ts`, which otherwise mirrors the backend contract. A restored conversation has no
 timing, so the collapsed trace reads `5 steps` rather than inventing a duration.
+
+---
+
+## D40 — The document pane says where you are, and the page a citation named announces itself
+
+**Decision.** The PDF toolbar no longer shows the manual's title or page count — only `Page N of M`
+and icon controls. When a citation changes the page, the page it lands on rings in indigo for about a
+second.
+
+**Why the title went.** With the global header (D37) naming the manual and its page count, the title
+appeared three times on one screen: header, chat panel header, PDF toolbar. The pane a document is
+already visible in does not need to be told which document it is; it needs to say *where in it you
+are*. That removed `title` and `subtitle` from `PdfViewer` entirely.
+
+**Why the page announces itself.** Clicking a citation is the interaction the whole product argument
+rests on — "this answer came from *that* page". It previously changed the scroll position and nothing
+else, so the two panes read as unrelated: an answer on the left, an unexplained jump on the right.
+A one-second ring in the manual colour (`--color-manual`, the same hue the citation pill uses) makes
+the right pane visibly answer the click.
+
+**A lint rule is suppressed here, deliberately.** `react-hooks/set-state-in-effect` fires on the
+effect that reacts to the `page` prop, because it moves the scroll position and marks the located
+page — both state. Reacting to an external change with transient UI that decays on a timer is the
+case that rule's own documentation carves out. The alternatives were a ref-and-DOM hack, or a token
+prop that moves the same problem one level up. The suppression carries its reasoning in the code
+rather than a bare disable comment.
+
+Worth knowing for anyone who meets it: the rule traces *into* `jump()`, so the effect was always
+setting state this way. Adding the ring is what made it visible to the linter, not what introduced it.
